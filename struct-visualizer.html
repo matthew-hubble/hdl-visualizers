@@ -1,0 +1,1054 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Struct visualizer — SystemVerilog packed structures</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="fixed-point.css">
+<style>
+/* This page draws whole vectors rather than single bits, so it runs wider than
+   the converter and adds a field diagram on top of the shared scale. */
+:root{--wrap:1180px}
+.lede{max-width:60ch}
+.stamp{font-size:19px;letter-spacing:.01em;padding:8px 14px;gap:10px}
+h1 .kw{color:var(--frac)}
+
+/* ---------- source ----------
+   The gutter is absolutely positioned so its line count never drives the height
+   of the box; the textarea alone does that, and stays resizable. */
+.editor{
+  --dg:2;                                     /* digits in the largest line number */
+  position:relative;background:#F7F9FB;border:1px solid var(--rule);border-radius:3px;
+  overflow:hidden;
+}
+.editor:focus-within{outline:2px solid var(--int);outline-offset:1px}
+.gutter{
+  position:absolute;left:0;top:0;bottom:0;width:calc(var(--dg) * 1ch + 17px);overflow:hidden;
+  padding:10px 8px 10px 0;text-align:right;user-select:none;pointer-events:none;
+  font-family:var(--mono);font-size:13px;line-height:1.6;
+  color:var(--ink3);background:#F0F4F7;border-right:1px solid var(--rule2);
+}
+.gutter div{font-variant-numeric:tabular-nums}
+.gutter div.bad{color:var(--warn);background:var(--warn-bg);font-weight:500}
+textarea#src{
+  display:block;font-family:var(--mono);font-size:13px;line-height:1.6;color:var(--ink);
+  background:transparent;border:0;border-radius:0;
+  padding:10px 12px 10px calc(var(--dg) * 1ch + 29px);
+  width:100%;min-height:272px;resize:vertical;tab-size:2;white-space:pre;overflow:auto;
+}
+textarea#src:focus-visible{outline:none}
+select#root{
+  font-family:var(--mono);font-size:14px;color:var(--ink);cursor:pointer;
+  background:#F7F9FB;border:1px solid var(--rule);border-radius:3px;padding:8px 10px;min-width:172px;
+}
+.presets{display:flex;gap:6px;flex-wrap:wrap;margin-top:14px;padding-top:14px;border-top:1px dashed var(--rule2)}
+.presets button{
+  font-family:var(--mono);font-size:12px;padding:5px 9px;cursor:pointer;
+  border:1px solid var(--rule);background:transparent;color:var(--ink2);border-radius:2px;
+}
+.presets button:hover{border-color:var(--ink);color:var(--ink)}
+.presets .plbl{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink3);align-self:center;margin-right:4px}
+
+/* ---------- notes ---------- */
+#notes{display:flex;flex-direction:column;gap:8px;margin-bottom:14px}
+#notes:empty{display:none}
+.note{display:flex;gap:10px;align-items:baseline;border-radius:3px;padding:9px 13px;font-size:13px}
+.note b{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;flex:none}
+.note.alert{border:1px solid var(--alert);background:var(--alert-bg);color:var(--alert)}
+.note.warn{border:1px solid var(--warn);background:var(--warn-bg);color:var(--warn)}
+.legendline .hint{margin-left:auto;letter-spacing:.06em;text-transform:none}
+#alignhint{padding-bottom:10px}
+
+/* ---------- field diagram ----------
+   One .drow per line of the vector. The outer .dtrack is a grid of the full row
+   width so a short top row still lines its bit columns up with the rows below;
+   the .track and .ticks inside it span only the bits that exist. */
+.dcap{font-family:var(--mono);font-size:11px;letter-spacing:.04em;color:var(--ink3);margin:0 0 9px}
+.dcap b{color:var(--ink2);font-weight:500}
+.dcap + .drow{margin-top:0}
+.view + .view{margin-top:22px;padding-top:18px;border-top:1px dashed var(--rule2)}
+.drow{display:flex;align-items:flex-start;gap:10px}
+.drow + .drow{margin-top:11px}
+.rlab{
+  flex:none;width:58px;text-align:right;padding-top:15px;
+  font-family:var(--mono);font-size:10px;letter-spacing:.04em;color:var(--ink3);
+}
+.dtrack{flex:1;min-width:0;display:grid;grid-template-columns:repeat(var(--n),minmax(0,1fr))}
+.track{
+  grid-row:1;display:grid;grid-template-columns:repeat(var(--n),minmax(0,1fr));
+  border:1px solid var(--rule);border-radius:3px;overflow:hidden;background:var(--panel);
+}
+.ticks{grid-row:2;display:grid;grid-template-columns:repeat(var(--n),minmax(0,1fr));height:12px;margin-top:2px}
+.ticks i{border-left:1px solid var(--rule);height:5px}
+.ticks i.q{height:8px}
+.ticks i.b{height:12px;border-left-color:var(--ink3)}
+.ticks i:last-child{border-right:1px solid var(--ink3)}
+
+/* one field of the vector; .seg is left to the shared segmented control */
+.fseg{
+  container-type:inline-size;position:relative;min-width:0;overflow:hidden;
+  border:0;border-left:1px solid var(--rule);border-radius:0;font:inherit;cursor:pointer;
+  background:var(--sbg);color:var(--sfg);padding:6px 0 7px;
+  display:flex;flex-direction:column;justify-content:center;gap:3px;
+}
+.fseg:first-child{border-left:0}
+.fseg .ixs{
+  display:flex;justify-content:space-between;gap:3px;padding:0 4px;
+  font-family:var(--mono);font-size:9px;font-style:normal;line-height:1;color:var(--ink3);
+}
+.fseg.one .ixs{justify-content:center}
+.fseg .nm{
+  font-family:var(--mono);font-size:12px;font-weight:500;line-height:1.3;text-align:center;
+  padding:0 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.fseg .nm:empty{min-height:16px}
+.fseg:hover{filter:brightness(.975)}
+.fseg.hl{outline:2px solid var(--ink);outline-offset:-2px;z-index:2}
+.fseg.flash{animation:flash .5s ease-out}
+/* a field cut by the row boundary keeps a dotted edge on the side it continues */
+.fseg.cl::before,.fseg.cr::after{content:"";position:absolute;top:0;bottom:0;opacity:.65}
+.fseg.cl::before{left:0;border-left:2px dotted var(--sfg)}
+.fseg.cr::after{right:0;border-right:2px dotted var(--sfg)}
+.fseg.pad,.fseg.mute{cursor:default;--sfg:var(--ink3);--sbg:#F1F5F8}
+.fseg.pad{background-image:repeating-linear-gradient(135deg,rgba(138,154,168,.16) 0 3px,transparent 3px 7px)}
+.fseg.pad .nm{font-weight:400;letter-spacing:.1em;font-size:10px;text-transform:uppercase}
+
+/* field colours, in the order the fields are declared */
+.c0{--sfg:#5B37D4;--sbg:#EDE9FC}
+.c1{--sfg:#0B4FA6;--sbg:#E5EDF8}
+.c2{--sfg:#0B7C7C;--sbg:#E0F0EF}
+.c3{--sfg:#8A6410;--sbg:#F8F0DF}
+.c4{--sfg:#B01B2E;--sbg:#FAE8EA}
+.c5{--sfg:#2E7A4B;--sbg:#E6F2E9}
+.c6{--sfg:#9C2483;--sbg:#F9E8F4}
+.c7{--sfg:#4A5878;--sbg:#EBEEF4}
+
+/* narrow fields give up the second index, then shrink their name, then drop it */
+@container (max-width:78px){.fseg .nm{font-size:11px}}
+@container (max-width:52px){.fseg .ixs .lo{display:none}}
+@container (max-width:50px){.fseg .nm{font-size:10px;padding:0 2px}}
+@container (max-width:34px){.fseg .nm{font-size:9px;padding:0 1px;letter-spacing:-.03em}}
+@container (max-width:22px){.fseg .ixs{font-size:8px;padding:0 1px}}
+@container (max-width:18px){.fseg .nm{display:none}}
+@container (max-width:13px){.fseg .ixs{display:none}}
+
+/* ---------- output tabs ---------- */
+.tabrow{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:14px}
+#tabs button[aria-selected=true]{background:var(--ink);color:#fff}
+#tabs button[aria-selected=false]:hover{background:var(--rule2);color:var(--ink)}
+.code{
+  font-family:var(--mono);font-size:12px;line-height:1.55;color:var(--ink);
+  background:#F7F9FB;border:1px solid var(--rule2);border-radius:3px;
+  margin:0;padding:12px 14px;max-height:62vh;overflow:auto;white-space:pre;tab-size:4;
+}
+.code .cm{color:var(--ink3)}
+
+/* ---------- field table ---------- */
+.tscroll{overflow-x:auto}
+.ftab{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:12px}
+.ftab th{
+  font-family:var(--mono);font-size:10px;letter-spacing:.13em;text-transform:uppercase;
+  color:var(--ink2);font-weight:500;text-align:left;white-space:nowrap;
+  padding:0 14px 8px 0;border-bottom:1px solid var(--rule);
+}
+.ftab td{padding:6px 14px 6px 0;border-top:1px solid var(--rule2);white-space:nowrap;color:var(--ink)}
+.ftab th.r,.ftab td.r{text-align:right;padding-right:18px}
+.ftab tbody tr.hl{background:#F4F8FB}
+.ftab tbody tr.dim td{color:var(--ink3)}
+.ftab .fn{display:flex;align-items:center;gap:8px}
+.ftab .sw{background:var(--sfg);flex:none}
+.ftab .ty,.ftab .mk{color:var(--ink2)}
+.ftab .mk{font-size:11px;letter-spacing:.02em;color:var(--ink3)}
+.ftab .vw{color:var(--ink3)}
+#tblwrap.empty{display:none}
+#dmeta{margin-top:10px}
+#dmeta .fkey + .fkey::before{content:"·";color:var(--rule);margin-right:6px}
+
+footer b{color:var(--ink2);font-weight:500}
+footer code{font-family:var(--mono);color:var(--ink2)}
+
+@media (max-width:860px){
+  .rlab{width:44px}
+  .fseg .nm{font-size:11px}
+  .code{font-size:11px}
+}
+@media (prefers-reduced-motion:reduce){
+  .fseg.flash{animation:none}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div>
+      <div class="eyebrow">IEEE 1800-2023 · 7.2 structures</div>
+      <h1><span class="kw">struct</span> <span class="kw">packed</span>? layout</h1>
+      <p class="lede">Paste a typedef or a struct declaration. Fields are drawn in the vector they pack into — <code>struct packed</code> abuts them, most significant member first, while a plain <code>struct</code> gives every member a word of its own.</p>
+    </div>
+    <div class="stamp"><small>type</small><span id="stampname">—</span><small id="stampw">0 bits</small></div>
+  </header>
+
+  <div id="notes" role="status" aria-live="polite"></div>
+
+  <!-- SOURCE -->
+  <section class="panel">
+    <p class="legendline"><span>Declarations</span><span class="hint" id="srchint">typedef · struct · union · parameter</span></p>
+    <div class="field">
+      <label for="src" id="srclabel">SystemVerilog source</label>
+      <div class="editor" id="editor">
+      <div class="gutter" id="gutter" aria-hidden="true"></div>
+      <textarea id="src" spellcheck="false" autocomplete="off" autocapitalize="off" wrap="off">// A packed struct abuts its fields; the first member is the most significant.
+parameter int ADDR_W = 32;
+
+typedef struct packed {
+  logic [1:0] cmd;
+  logic       valid;
+  logic [4:0] _rsvd;
+} ctrl_t;
+
+typedef struct packed {
+  ctrl_t             ctrl;
+  logic [ADDR_W-1:0] addr;
+  logic [7:0]        len;
+  logic [3:0]        qos;
+  logic [11:0]       _pad;
+} desc_t;</textarea>
+      </div>
+    </div>
+    <div class="row" style="margin-top:14px">
+      <div class="field">
+        <span class="lbl">Source syntax</span>
+        <div class="seg" id="syntax" role="group" aria-label="Which language the source is written in">
+          <button type="button" data-v="sv"  aria-pressed="true">SystemVerilog</button>
+          <button type="button" data-v="rdl" aria-pressed="false">SystemRDL</button>
+        </div>
+      </div>
+      <div class="field">
+        <label for="root">Type to draw</label>
+        <select id="root"></select>
+      </div>
+      <div class="field">
+        <span class="lbl">Split rows at</span>
+        <label class="check"><input type="checkbox" id="w64"><span id="w64lbl">32 bits</span></label>
+      </div>
+      <div class="field">
+        <span class="lbl">Leading underscore</span>
+        <label class="check auto"><input type="checkbox" id="us" checked><span>show _names</span></label>
+      </div>
+      <div class="field">
+        <span class="lbl">Nested types</span>
+        <label class="check"><input type="checkbox" id="flat" checked><span>flatten</span></label>
+      </div>
+    </div>
+    <div class="row" style="margin-top:14px">
+      <div class="field">
+        <span class="lbl">Unpacked align to</span>
+        <div class="seg" id="unit" role="group" aria-label="Alignment word width in bits">
+          <button type="button" data-v="8"  aria-pressed="true">8</button>
+          <button type="button" data-v="16" aria-pressed="false">16</button>
+          <button type="button" data-v="32" aria-pressed="false">32</button>
+          <button type="button" data-v="64" aria-pressed="false">64</button>
+        </div>
+      </div>
+      <div class="field">
+        <span class="lbl">Field sits at</span>
+        <div class="seg" id="just" role="group" aria-label="Which end of the word the field sits at">
+          <button type="button" data-v="msb" aria-pressed="true">MSB</button>
+          <button type="button" data-v="lsb" aria-pressed="false">LSB</button>
+        </div>
+      </div>
+      <div class="field" id="regwfield">
+        <span class="lbl">RDL register width</span>
+        <div class="seg" id="regw" role="group" aria-label="SystemRDL register access width in bits">
+          <button type="button" data-v="8"  aria-pressed="false">8</button>
+          <button type="button" data-v="16" aria-pressed="false">16</button>
+          <button type="button" data-v="32" aria-pressed="true">32</button>
+          <button type="button" data-v="64" aria-pressed="false">64</button>
+        </div>
+      </div>
+      <span class="hint" id="alignhint"></span>
+    </div>
+    <div class="presets" id="presets"><span class="plbl">Examples</span></div>
+  </section>
+
+  <!-- DIAGRAM -->
+  <section class="panel" id="dpanel">
+    <p class="legendline"><span>Bit layout</span><span class="hint" id="dhint">hover a field to link it to the table · click to copy its bit range</span><button class="copy" id="copyimg">copy image</button></p>
+    <div id="diagram"></div>
+    <div class="fields" id="dmeta"></div>
+  </section>
+
+  <!-- FIELDS · C · PYTHON -->
+  <section class="panel" id="tblwrap">
+    <div class="tabrow">
+      <div class="seg" id="tabs" role="tablist" aria-label="Field output">
+        <button type="button" role="tab" id="tab-fields" data-t="fields" aria-selected="true"  aria-controls="pane-fields">fields</button>
+        <button type="button" role="tab" id="tab-c"      data-t="c"      aria-selected="false" aria-controls="pane-c">C</button>
+        <button type="button" role="tab" id="tab-py"     data-t="py"     aria-selected="false" aria-controls="pane-py">Python</button>
+        <button type="button" role="tab" id="tab-rdl"    data-t="rdl"    aria-selected="false" aria-controls="pane-rdl">SystemRDL</button>
+      </div>
+      <button class="copy" id="copybtn">copy table</button>
+    </div>
+    <div class="tscroll" id="pane-fields" role="tabpanel" aria-labelledby="tab-fields">
+      <table class="ftab">
+        <thead><tr>
+          <th>Field</th><th>Type</th><th>Bits</th><th class="r">Width</th><th id="mkhead">Mask</th>
+        </tr></thead>
+        <tbody id="ftbody"></tbody>
+      </table>
+    </div>
+    <pre class="code" id="pane-c" role="tabpanel" aria-labelledby="tab-c" tabindex="0" hidden></pre>
+    <pre class="code" id="pane-py" role="tabpanel" aria-labelledby="tab-py" tabindex="0" hidden></pre>
+    <pre class="code" id="pane-rdl" role="tabpanel" aria-labelledby="tab-rdl" tabindex="0" hidden></pre>
+  </section>
+
+  <footer>
+    <b>Packed.</b> In a <code>struct packed</code> the members are laid down without gaps and the first member specified is the most significant, so bit 0 of the vector is the last bit of the last member. Members must be integral: a real, an unpacked array or a plain struct inside one is flagged.<br>
+    <b>Plain.</b> A <code>struct</code> with no <code>packed</code> keyword gives every member a whole word of its own — 8, 16, 32 or 64 bits, whichever <b>unpacked align to</b> says — and the spare bits appear as <b>pad</b>. <b>Field sits at</b> puts the member against the top of that word or against the bottom; at the bottom its least significant bit lands on the boundary, the way a register map usually reads. A member wider than the word takes as many words as it needs. The structure itself is rounded up to whole words, so nesting one inside another keeps the alignment, and a packed member abuts its own fields inside whatever word it lands in.<br>
+    <b>Reading the diagram.</b> Bit 0 sits at the right of the last row, tick marks step one bit each with a longer mark on every byte boundary, and each field carries the bit index of its own two ends. A field wider than the row is drawn on both rows with a dotted edge where it continues. <b>Copy image</b> puts a PNG of the rows as drawn, at three times the size on screen, on the clipboard — or saves it as a file if the browser will not take a picture.<br>
+    <b>Two syntaxes.</b> <b>Source syntax</b> says which language the box holds. On SystemVerilog the last tab writes SystemRDL; on SystemRDL it writes SystemVerilog, and the RDL is read by laying its registers end to end with offset 0 at the bottom — the same order it is written out in — so the diagram, the table, C and Python all work the same either way. Switching the setting puts whatever that tab was showing into the box, so the two directions are a round trip. A SystemRDL field cannot hold fields, so a nested struct travels as a dotted <code>desc</code> — <code>ctrl.cmd</code> — and reading it back turns each run of <code>name.field</code> descriptions into the subtype it came from, with its own typedef when <b>flatten</b> is off. A description that starts with an underscore, at any level, is read as reserved, so <code>ctrl._rsvd</code> stays quiet under the underscore switch. A description that reads like prose is left as documentation and the instance name is used instead. One thing does change on the way through: the vector grows to hold whole registers, so 48 bits in 32-bit registers comes back as 64 with the spare bits reserved. Bits no field claimed arrive as <code>_rsvd</code> members.<br>
+    <b>What the parser reads.</b> <code>typedef</code>, <code>struct</code> and <code>union</code> bodies, packed and unpacked dimensions, <code>parameter</code>, <code>localparam</code> and <code>`define</code> values in range expressions, plus <code>$bits</code> and <code>$clog2</code>. Everything else in the file is skipped, and any line it could not read, or had a word of warning about, is marked in the line numbers.<br>
+    <b>Generated code.</b> The C and Python tabs move the same bit positions the diagram draws. Up to 64 bits the C carries the vector in one unsigned word; wider than that it uses a byte array with <code>buf[0]</code> holding the first member, the order the rows read from the top down. Python integers have no width limit, so one shift and mask serves any size. Field paths become identifiers — <code>slot[3].lo</code> turns into <code>slot_3_lo</code> — and pad bits are left at zero.<br>
+    <b>Nested types.</b> With <b>flatten</b> off a nested struct stays one block in the diagram, and the generated code keeps it as its own type: C gets a nested <code>struct</code> with its own pack and unpack that the outer one calls, Python gets a nested dataclass held by <code>field(default_factory=...)</code>, and SystemRDL — where a field cannot hold fields — gets a <code>reg</code> component describing the inside, which the carrying field points at. Bit numbers inside a nested type start again from its own bit 0. Two members of the same type share one description. C keeps a nested struct wider than 64 bits as a byte array instead, since its pack has no single word to return; Python has no such limit.<br>
+    <b>SystemRDL.</b> Each type becomes an <code>addrmap</code> of registers <b>RDL register width</b> bits wide, so a type larger than one register is spread over as many as it needs. Registers are listed in address order, and offset 0 carries the least significant word, so bit 0 of the struct is bit 0 of the first register — the opposite end from the diagram, which puts the first member at the top. A field that crosses a register boundary is split into parts named after the bits of the field they hold, and the low part lands at the low address: <code>addr[7:0]</code> becomes <code>addr_7_0</code> at offset 0, <code>addr[31:8]</code> becomes <code>addr_31_8</code> in the next register. Bits no field claims are left undeclared, which SystemRDL reads as reserved, and <code>sw</code> and <code>hw</code> access are set once as addrmap defaults for you to change.<br>
+    <b>Fields held back.</b> Turning off <b>show _names</b> also drops those fields from the generated struct, dataclass and addrmap. They are treated like pad from then on: pack leaves their bits at zero, unpack does not read them back, and no register field is declared for them. The ranges it left out are named in the comment at the top of each tab, and the field table still lists them so you can see what is in the gaps.
+  </footer>
+</div>
+
+<script src="sv-struct.js"></script>
+<script>
+"use strict";
+(function(){
+  const $ = id => document.getElementById(id);
+  const src = $("src"), sel = $("root"), diagram = $("diagram"), tbody = $("ftbody");
+  const gutter = $("gutter"), editor = $("editor");
+  const COLORS = 8;
+
+  /* ---------- small DOM helpers ---------- */
+  function el(tag,cls,text){
+    const e = document.createElement(tag);
+    if(cls) e.className = cls;
+    if(text !== undefined) e.textContent = text;
+    return e;
+  }
+
+  /* ---------- line numbers ----------
+     Lines the page had something to say about are marked, so a note that names
+     a line can be found in the source. */
+  function drawGutter(flagged){
+    const lines = src.value.split("\n").length;
+    const sig = lines + "|" + flagged.join(",");
+    if(gutter._sig !== sig){
+      gutter._sig = sig;
+      const bad = {};
+      flagged.forEach(n => { bad[n] = true; });
+      let html = "";
+      for(let i=1;i<=lines;i++) html += bad[i] ? '<div class="bad">'+i+"</div>" : "<div>"+i+"</div>";
+      gutter.innerHTML = html;
+      editor.style.setProperty("--dg", String(lines).length);
+    }
+    gutter.scrollTop = src.scrollTop;
+  }
+  const lineOf = msg => { const m = /^line (\d+):/.exec(msg); return m ? +m[1] : 0; };
+  src.addEventListener("scroll", () => { gutter.scrollTop = src.scrollTop; });
+
+  /* ---------- notes ---------- */
+  let notes = [];
+  const note = (kind,label,msg) => notes.push({kind,label,msg});
+  function drawNotes(){
+    const box = $("notes");
+    box.innerHTML = "";
+    for(const nt of notes){
+      const d = el("div","note "+nt.kind);
+      d.appendChild(el("b","",nt.label));
+      d.appendChild(el("span","",nt.msg));
+      box.appendChild(d);
+    }
+  }
+
+  /* ---------- state ---------- */
+  let views = [];                                     // what is on screen now
+  let code = {c:"", py:"", rdl:""};                   // what the tabs hold
+  let align = 8, lsb = false;                         // how a plain struct pads
+  let regw = 32;                                      // SystemRDL register width
+  let metaBits = [];                                  // the summary under the diagram
+  let syntax = "sv";                                  // which language the source is in
+  /* The last tab always holds the other language: SystemRDL for a SystemVerilog
+     source, SystemVerilog for a SystemRDL one. */
+  const LANG = {
+    sv:  {self:"SystemVerilog source", other:"SystemRDL",     copy:"copy rdl",
+          hint:"typedef · struct · union · parameter"},
+    rdl: {self:"SystemRDL source",     other:"SystemVerilog", copy:"copy sv",
+          hint:"addrmap · reg · field · property"}
+  };
+  const rowBits  = () => $("w64").checked ? 64 : 32;
+  const showUS   = () => $("us").checked;
+  const isHidden = s => s.us && !showUS();
+  const press = (seg,btn) => seg.querySelectorAll("button")
+    .forEach(b => b.setAttribute("aria-pressed", String(b===btn)));
+
+  /* ---------- render ---------- */
+  function render(){
+    notes = [];
+    const parsed = syntax==="rdl" ? SV.parseRdl(src.value) : SV.parse(src.value);
+    syncRoots(parsed.roots);
+
+    const res = SV.views(parsed, sel.value,
+                         {flatten:$("flat").checked, align, lsb});
+    views = res.views || [];
+    $("alignhint").textContent = res.unpacked
+      ? "a plain struct gives each member " + (align===8 ? "an " : "a ") + align +
+        "-bit word, field at the " + (lsb ? "bottom" : "top")
+      : "align and MSB/LSB are idle — nothing on screen is unpacked";
+
+    let vi = 0;
+    for(const v of views){
+      let color = 0;
+      const seen = {};
+      v.segs.forEach(s => { if(!s.pad) seen[s.name] = (seen[s.name]||0) + 1; });
+      for(const s of v.segs){
+        s.key = vi + "-" + s.idx;
+        s.color = s.pad ? -1 : (color++ % COLORS);
+        // a leaf name is enough on its own unless a sibling elsewhere shares it
+        s.disp = s.pad ? "" : (seen[s.name] > 1 ? s.path : s.name);
+      }
+      vi++;
+    }
+
+    diagram.innerHTML = "";
+    tbody.innerHTML = "";
+    if(res.error){
+      note("alert","Layout",res.error);
+      $("stampname").textContent = "—";
+      $("stampw").textContent = "0 bits";
+      $("dmeta").textContent = "";
+      metaBits = [];
+      $("tblwrap").classList.add("empty");
+      $("dpanel").classList.add("faded");
+    } else {
+      views.forEach(v => diagram.appendChild(drawView(v)));
+      drawTable();
+      drawMeta();
+      drawCode();
+      $("tblwrap").classList.remove("empty");
+      $("dpanel").classList.remove("faded");
+    }
+
+    if(parsed.skipped.length){
+      const shown = parsed.skipped.slice(0,6).join(", ");
+      note("warn","Skipped","Nothing this page understands on line " + shown +
+           (parsed.skipped.length>6 ? " (and "+(parsed.skipped.length-6)+" more)" : "") + ".");
+    }
+    (res.warn||[]).forEach(w => note("warn","Check",w));
+    drawNotes();
+    drawGutter(parsed.skipped.concat((res.warn||[]).map(lineOf).filter(Boolean)));
+  }
+
+  function drawMeta(){
+    const total = views.reduce((a,v) => Math.max(a,v.width), 0);
+    const segs  = views.reduce((a,v) => a.concat(v.segs), []);
+    const fields = segs.filter(s => !s.pad).length;
+    const padBits = segs.reduce((a,s) => a + (s.pad ? s.w : 0), 0);
+    const hidden = segs.filter(s => isHidden(s)).length;
+
+    $("stampname").textContent = views.length ? (views.length>1 ? views[0].label.split(".")[0] : views[0].label) : "—";
+    $("stampw").textContent = total + (total===1 ? " bit" : " bits");
+
+    const meta = $("dmeta");
+    meta.innerHTML = "";
+    metaBits = [
+      total + (total===1?" bit":" bits"),
+      (total/8 === Math.floor(total/8) ? (total/8) + " bytes" : (total/8).toFixed(3) + " bytes"),
+      views.length>1 ? views.length + " variants" : null,
+      fields + (fields===1 ? " field" : " fields"),
+      padBits ? padBits + " pad bits" : null,
+      hidden ? hidden + " name" + (hidden===1?"":"s") + " withheld" : null,
+      "rows of " + rowBits()
+    ].filter(Boolean);
+    metaBits.forEach(b => meta.appendChild(el("span","fkey",b)));
+  }
+
+  /* ---------- one vector ---------- */
+  function drawView(v){
+    const box = el("div","view");
+    if(v.caption || views.length>1){
+      const cap = el("p","dcap");
+      cap.appendChild(el("b","",v.label || v.name));
+      if(v.caption) cap.appendChild(document.createTextNode(" · " + v.caption));
+      box.appendChild(cap);
+    }
+    const R = rowBits();
+    const rows = Math.max(1, Math.ceil(v.width / R));
+    for(let r=0;r<rows;r++){
+      const lo = (rows-1-r) * R;
+      const hi = Math.min(v.width-1, lo + R - 1);
+      if(hi < lo) continue;
+      box.appendChild(drawRow(v,hi,lo,R));
+    }
+    return box;
+  }
+
+  function drawRow(v,rowHi,rowLo,R){
+    const used = rowHi - rowLo + 1;
+    const row = el("div","drow");
+    row.appendChild(el("div","rlab", used===1 ? String(rowHi) : rowHi + ":" + rowLo));
+
+    const dt = el("div","dtrack");
+    dt.style.setProperty("--n", R);
+    const span = (R - used + 1) + " / span " + used;
+
+    const track = el("div","track");
+    track.style.setProperty("--n", used);
+    track.style.gridColumn = span;
+    track.setAttribute("aria-label", "bits " + rowHi + " down to " + rowLo);
+    for(const s of v.segs){
+      if(s.hi < rowLo || s.lo > rowHi) continue;
+      track.appendChild(drawSeg(s, Math.min(s.hi,rowHi), Math.max(s.lo,rowLo), rowHi));
+    }
+
+    const ticks = el("div","ticks");
+    ticks.style.setProperty("--n", used);
+    ticks.style.gridColumn = span;
+    ticks.setAttribute("aria-hidden","true");
+    for(let b=rowHi;b>=rowLo;b--)
+      ticks.appendChild(el("i", (b+1)%8===0 ? "b" : (b+1)%4===0 ? "q" : ""));
+
+    dt.appendChild(track);
+    dt.appendChild(ticks);
+    row.appendChild(dt);
+    return row;
+  }
+
+  function drawSeg(s,chi,clo,rowHi){
+    const hide = isHidden(s);
+    const b = el("button", ["fseg",
+      s.pad ? "pad" : hide ? "mute" : "c" + s.color,
+      chi===clo ? "one" : "",
+      chi < s.hi ? "cl" : "",
+      clo > s.lo ? "cr" : ""
+    ].filter(Boolean).join(" "));
+    b.type = "button";
+    b.dataset.seg = s.key;
+    b.style.gridColumn = (rowHi - chi + 1) + " / span " + (chi - clo + 1);
+
+    const range = s.hi===s.lo ? "["+s.hi+"]" : "["+s.hi+":"+s.lo+"]";
+    const who = s.pad ? "pad" : hide ? "reserved" : s.path;
+    b.title = who + "  " + range + "  " + s.w + (s.w===1?" bit":" bits") +
+              (s.pad || hide ? "" : "  ·  " + s.type);
+    b.setAttribute("aria-label", b.title);
+
+    const ixs = el("div","ixs");
+    ixs.appendChild(el("i","hi", String(chi)));
+    if(chi !== clo) ixs.appendChild(el("i","lo", String(clo)));
+    b.appendChild(ixs);
+    b.appendChild(el("div","nm", s.pad ? "pad" : hide ? "" : s.disp));
+    return b;
+  }
+
+  /* ---------- table ---------- */
+  const maskOf = (hi,lo,w) =>
+    "0x" + (((1n << BigInt(hi-lo+1)) - 1n) << BigInt(lo))
+             .toString(16).toUpperCase().padStart(Math.ceil(w/4), "0");
+
+  function drawTable(){
+    const wide = views.some(v => v.width > 128);
+    $("mkhead").style.display = wide ? "none" : "";
+    for(const v of views){
+      for(const s of v.segs){
+        const tr = el("tr", isHidden(s) || s.pad ? "dim" : "");
+        tr.dataset.seg = s.key;
+
+        const c1 = el("td");
+        const fn = el("div","fn");
+        fn.appendChild(el("i","sw" + (s.pad ? "" : " c" + s.color)));
+        fn.appendChild(el("span","", s.pad ? "—" : label(v,s)));
+        c1.appendChild(fn);
+        tr.appendChild(c1);
+
+        tr.appendChild(el("td","ty", s.pad ? "pad" : s.type));
+        tr.appendChild(el("td","", s.hi===s.lo ? "["+s.hi+"]" : "["+s.hi+":"+s.lo+"]"));
+        tr.appendChild(el("td","r", String(s.w)));
+        const mk = el("td","mk", wide ? "" : maskOf(s.hi,s.lo,v.width));
+        if(wide) mk.style.display = "none";
+        tr.appendChild(mk);
+        tbody.appendChild(tr);
+      }
+    }
+  }
+
+  const label = (v,s) =>
+    (views.length>1 && s.path !== v.name) ? v.name + "." + s.path : s.path;
+
+  /* ---------- generated code ---------- */
+  const esc = s => s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+  // the generators only ever put /* */, // or # where a comment belongs
+  const dimComments = (text,re) =>
+    esc(text).replace(re, m => '<span class="cm">' + m + "</span>");
+
+  function drawCode(){
+    const opts = {skipUnderscore: !showUS()};
+    const cLike = /\/\*[\s\S]*?\*\/|\/\/[^\n]*/g;
+    code.c   = SV.cCode(views, opts);
+    code.py  = SV.pyCode(views, opts);
+    code.rdl = syntax==="sv"
+      ? SV.rdlCode(views, {skipUnderscore:opts.skipUnderscore, regwidth:regw})
+      : SV.svCode(views);
+    $("pane-c").innerHTML   = dimComments(code.c,  cLike);
+    $("pane-py").innerHTML  = dimComments(code.py, /"""[\s\S]*?"""|#[^\n]*/g);
+    $("pane-rdl").innerHTML = dimComments(code.rdl, cLike);
+  }
+
+  function tableText(){
+    const rows = [["field","type","bits","width"]];
+    for(const v of views)
+      for(const s of v.segs)
+        rows.push([s.pad ? "(pad)" : label(v,s), s.pad ? "" : s.type,
+                   s.hi===s.lo ? "["+s.hi+"]" : "["+s.hi+":"+s.lo+"]", String(s.w)]);
+    const w = [0,1,2,3].map(i => Math.max.apply(null, rows.map(r => r[i].length)));
+    return rows.map(r => r.map((c,i) => i===3 ? c.padStart(w[i]) : c.padEnd(w[i]))
+                          .join("  ").replace(/\s+$/,"")).join("\n");
+  }
+
+  /* ---------- linking the diagram to the table ---------- */
+  let hot = null;
+  function setHot(key){
+    if(hot === key) return;
+    if(hot) document.querySelectorAll('[data-seg="'+hot+'"]').forEach(e => e.classList.remove("hl"));
+    hot = key;
+    if(hot) document.querySelectorAll('[data-seg="'+hot+'"]').forEach(e => e.classList.add("hl"));
+  }
+  document.addEventListener("mouseover", e => {
+    const t = e.target.closest ? e.target.closest("[data-seg]") : null;
+    setHot(t ? t.dataset.seg : null);
+  });
+  document.addEventListener("mouseleave", () => setHot(null));
+
+  function flash(btn,label){
+    if(!btn || btn._was) return;
+    btn._was = btn.textContent;
+    btn.textContent = label;
+    setTimeout(() => { btn.textContent = btn._was; btn._was = null; }, 1000);
+  }
+
+  async function copy(text,btn,doneText){
+    const done = () => flash(btn, doneText || "copied");
+    try{ await navigator.clipboard.writeText(text); done(); }
+    catch(_){
+      const ta = document.createElement("textarea");
+      ta.value = text; document.body.appendChild(ta); ta.select();
+      try{ document.execCommand("copy"); done(); }catch(e){}
+      ta.remove();
+    }
+  }
+
+  diagram.addEventListener("click", e => {
+    const b = e.target.closest(".fseg");
+    if(!b || b.classList.contains("pad")) return;
+    const seg = find(b.dataset.seg);
+    if(!seg) return;
+    copy(seg.hi===seg.lo ? "["+seg.hi+"]" : "["+seg.hi+":"+seg.lo+"]");
+    b.classList.remove("flash");
+    void b.offsetWidth;
+    b.classList.add("flash");
+  });
+  function find(key){
+    for(const v of views) for(const s of v.segs) if(s.key===key) return s;
+    return null;
+  }
+
+  /* ---------- the diagram as a picture ----------
+     Painted from the geometry the browser already worked out, so the image is
+     the diagram on screen rather than a second guess at it. */
+  const IMG_SCALE = 3;
+  const cs = el => window.getComputedStyle(el);
+  const fontOf = s =>
+    (s.fontStyle==="italic" ? "italic " : "") + (s.fontWeight||"400") + " " + s.fontSize + " " + s.fontFamily;
+
+  function paintDiagram(){
+    const rows = diagram.querySelectorAll(".drow");
+    if(!rows.length) return null;
+    const cv = document.createElement("canvas");
+    const g = cv.getContext && cv.getContext("2d");
+    if(!g) return null;                                  // no canvas, no picture
+
+    const box = diagram.getBoundingClientRect();
+    const mbox = $("dmeta").getBoundingClientRect();
+    const PAD = 16;
+    const top = box.top, bottom = Math.max(box.bottom, mbox.bottom);
+    const W = box.width + PAD*2, H = (bottom - top) + PAD*2;
+    cv.width = Math.round(W * IMG_SCALE);
+    cv.height = Math.round(H * IMG_SCALE);
+    g.scale(IMG_SCALE, IMG_SCALE);
+    g.fillStyle = "#FFFFFF";
+    g.fillRect(0, 0, W, H);
+
+    const ox = box.left - PAD, oy = top - PAD;
+    const rect = el => {
+      const r = el.getBoundingClientRect();
+      return {x:r.left-ox, y:r.top-oy, w:r.width, h:r.height};
+    };
+    const line = (x,y,w,h,fill) => { g.fillStyle = fill; g.fillRect(x,y,w,h); };
+
+    function fit(t,max){
+      if(max <= 0 || g.measureText(t).width <= max) return t;
+      let s = t;
+      while(s.length > 1 && g.measureText(s+"…").width > max) s = s.slice(0,-1);
+      return s + "…";
+    }
+    // canvas draws the text as written, so the transforms CSS applies come too
+    function shown(t,s){
+      if(s.textTransform === "uppercase") return t.toUpperCase();
+      if(s.textTransform === "lowercase") return t.toLowerCase();
+      if(s.textTransform === "capitalize")
+        return t.replace(/\b\w/g, c => c.toUpperCase());
+      return t;
+    }
+    function text(el,align,inset){
+      const s = cs(el);
+      if(s.display === "none" || s.visibility === "hidden") return;
+      const t = shown((el.textContent||"").trim(), s);
+      if(!t) return;
+      const r = rect(el);
+      if(!r.w && !r.h) return;                           // an ancestor is hidden
+      g.font = fontOf(s);
+      if("letterSpacing" in g) g.letterSpacing = s.letterSpacing==="normal" ? "0px" : s.letterSpacing;
+      g.fillStyle = s.color;
+      g.textBaseline = "middle";
+      g.textAlign = align || "left";
+      const room = r.w - (inset||0)*2;
+      const x = align==="center" ? r.x + r.w/2 : align==="right" ? r.x + r.w - (inset||0)
+                                                                : r.x + (inset||0);
+      g.fillText(align==="center" ? fit(t,room) : t, x, r.y + r.h/2);
+    }
+    // the dashed edge a split field carries, and the hatch on pad
+    function dotted(x,r,colour){
+      g.save();
+      g.strokeStyle = colour; g.globalAlpha = .65;
+      g.lineWidth = 2; g.setLineDash([2,2]);
+      g.beginPath(); g.moveTo(x, r.y); g.lineTo(x, r.y + r.h); g.stroke();
+      g.restore();
+    }
+    function hatch(r){
+      g.save();
+      g.beginPath(); g.rect(r.x, r.y, r.w, r.h); g.clip();
+      g.strokeStyle = "rgba(138,154,168,.45)"; g.lineWidth = 1;
+      for(let k = -r.h; k < r.w; k += 5){
+        g.beginPath();
+        g.moveTo(r.x + k, r.y + r.h);
+        g.lineTo(r.x + k + r.h, r.y);
+        g.stroke();
+      }
+      g.restore();
+    }
+
+    diagram.querySelectorAll(".dcap").forEach(cap => {
+      const b = cap.querySelector("b");
+      if(b) text(b,"left");
+      const r = rect(cap), s = cs(cap);
+      const tail = cap.lastChild && cap.lastChild.nodeType === 3 ? cap.lastChild.textContent : "";
+      if(tail && b){
+        const br = rect(b);
+        g.font = fontOf(s);
+        if("letterSpacing" in g) g.letterSpacing = "0px";
+        g.fillStyle = s.color;
+        g.textBaseline = "middle";
+        g.textAlign = "left";
+        g.fillText(tail, br.x + br.w, r.y + r.h/2);
+      } else if(!b) text(cap,"left");
+    });
+
+    rows.forEach(row => {
+      const track = row.querySelector(".track");
+      if(track){
+        const ts = cs(track), tr = rect(track);
+        line(tr.x, tr.y, tr.w, tr.h, ts.backgroundColor);
+        row.querySelectorAll(".fseg").forEach(seg => {
+          const s = cs(seg), r = rect(seg);
+          line(r.x, r.y, r.w, r.h, s.backgroundColor);
+          if(seg.classList.contains("pad")) hatch(r);
+          if(parseFloat(s.borderLeftWidth) > 0) line(r.x, r.y, 1, r.h, s.borderLeftColor);
+          if(seg.classList.contains("cl")) dotted(r.x + 1, r, s.color);
+          if(seg.classList.contains("cr")) dotted(r.x + r.w - 1, r, s.color);
+          seg.querySelectorAll(".ixs i").forEach(i => text(i,"left"));
+          const nm = seg.querySelector(".nm");
+          if(nm) text(nm,"center",3);
+        });
+        g.strokeStyle = ts.borderTopColor;
+        g.lineWidth = 1;
+        g.strokeRect(tr.x + .5, tr.y + .5, tr.w - 1, tr.h - 1);
+      }
+      row.querySelectorAll(".ticks i").forEach(t => {
+        const s = cs(t), r = rect(t);
+        if(!r.h) return;
+        line(r.x, r.y, 1, r.h, s.borderLeftColor);
+        if(parseFloat(s.borderRightWidth) > 0)
+          line(r.x + r.w - 1, r.y, 1, r.h, s.borderRightColor);
+      });
+      const lab = row.querySelector(".rlab");
+      if(lab) text(lab,"right");
+    });
+
+    const key = $("dmeta").querySelector(".fkey");
+    if(key && metaBits.length){
+      const s = cs(key), r = rect(key);
+      g.font = fontOf(s);
+      if("letterSpacing" in g) g.letterSpacing = "0px";
+      g.fillStyle = s.color;
+      g.textBaseline = "middle";
+      g.textAlign = "left";
+      g.fillText([$("stampname").textContent].concat(metaBits).join("  ·  "),
+                 r.x, r.y + r.h/2);
+    }
+    return cv;
+  }
+
+  const toBlob = cv => new Promise(res => cv.toBlob(res, "image/png"));
+
+  async function copyImage(btn){
+    const cv = paintDiagram();
+    if(!cv){ flash(btn,"nothing to copy"); return; }
+    if(window.ClipboardItem && navigator.clipboard && navigator.clipboard.write){
+      // a promise keeps the write inside the click, which some browsers insist on
+      try{
+        await navigator.clipboard.write([new ClipboardItem({"image/png": toBlob(cv)})]);
+        flash(btn,"copied"); return;
+      }catch(_){}
+      try{
+        await navigator.clipboard.write([new ClipboardItem({"image/png": await toBlob(cv)})]);
+        flash(btn,"copied"); return;
+      }catch(_){}
+    }
+    const a = document.createElement("a");                // hand over a file instead
+    a.download = ($("stampname").textContent || "struct").replace(/\W+/g,"_") + "-bits.png";
+    a.href = cv.toDataURL("image/png");
+    a.click();
+    flash(btn,"saved png");
+  }
+  $("copyimg").addEventListener("click", () => copyImage($("copyimg")));
+
+  /* ---------- tabs ---------- */
+  const TABS = ["fields","c","py","rdl"];
+  const COPYLBL = {fields:"copy table", c:"copy C", py:"copy python"};
+  let tab = "fields";
+  function setTab(t){
+    if(TABS.indexOf(t) < 0) return;
+    tab = t;
+    TABS.forEach(x => {
+      $("tab-"+x).setAttribute("aria-selected", String(x===t));
+      $("pane-"+x).hidden = x!==t;
+    });
+    $("copybtn").textContent = COPYLBL[t] || LANG[syntax].copy;
+  }
+
+  /* ---------- which language the source is in ---------- */
+  function applySyntax(){
+    $("tab-rdl").textContent = LANG[syntax].other;
+    $("srchint").textContent = LANG[syntax].hint;
+    $("srclabel").textContent = LANG[syntax].self;
+    $("regwfield").classList.toggle("faded", syntax !== "sv");
+    if(tab === "rdl") $("copybtn").textContent = LANG[syntax].copy;
+  }
+  function setSyntax(want,convert){
+    if(want === syntax || !LANG[want]) return;
+    const carried = convert && views.length ? code.rdl : "";
+    syntax = want;
+    press($("syntax"), $("syntax").querySelector('[data-v="'+want+'"]'));
+    applySyntax();
+    if(carried){
+      src.value = carried;                     // what the last tab was showing
+      src.scrollTop = 0; src.scrollLeft = 0;
+      sel.innerHTML = "";                      // the type list changes with the source
+    }
+  }
+  $("syntax").addEventListener("click", e => {
+    const b = e.target.closest("button");
+    if(!b || b.dataset.v === syntax) return;
+    setSyntax(b.dataset.v, true);
+    render();
+  });
+  $("tabs").addEventListener("click", e => {
+    const b = e.target.closest("button");
+    if(b) setTab(b.dataset.t);
+  });
+  $("tabs").addEventListener("keydown", e => {
+    const d = e.key==="ArrowRight" ? 1 : e.key==="ArrowLeft" ? -1 : 0;
+    if(!d) return;
+    e.preventDefault();
+    const next = TABS[(TABS.indexOf(tab) + d + TABS.length) % TABS.length];
+    setTab(next);
+    $("tab-"+next).focus();
+  });
+  $("copybtn").addEventListener("click", () =>
+    copy(tab==="fields" ? tableText() : code[tab], $("copybtn")));
+
+  /* ---------- type picker ---------- */
+  function syncRoots(roots){
+    const names = roots.map(r => r.name);
+    const shown = Array.prototype.map.call(sel.options, o => o.value);
+    if(names.join("\u0000") === shown.join("\u0000")) return;
+    const keep = sel.value;
+    sel.innerHTML = "";
+    roots.forEach(r => {
+      const o = document.createElement("option");
+      o.value = r.name;
+      o.textContent = r.name + (r.kind==="var" ? "  (variable)" : "");
+      sel.appendChild(o);
+    });
+    sel.value = names.indexOf(keep) >= 0 ? keep : (names[names.length-1] || "");
+  }
+
+  /* ---------- controls ---------- */
+  src.addEventListener("input", render);
+  sel.addEventListener("change", render);
+  $("flat").addEventListener("change", render);
+  $("us").addEventListener("change", render);
+  $("w64").addEventListener("change", () => {
+    $("w64lbl").textContent = rowBits() + " bits";
+    render();
+  });
+  $("unit").addEventListener("click", e => {
+    const b = e.target.closest("button");
+    if(!b) return;
+    align = +b.dataset.v;
+    press($("unit"), b);
+    render();
+  });
+  $("just").addEventListener("click", e => {
+    const b = e.target.closest("button");
+    if(!b) return;
+    lsb = b.dataset.v === "lsb";
+    press($("just"), b);
+    render();
+  });
+  $("regw").addEventListener("click", e => {
+    const b = e.target.closest("button");
+    if(!b) return;
+    regw = +b.dataset.v;
+    press($("regw"), b);
+    render();
+  });
+
+  /* ---------- examples ---------- */
+  const EXAMPLES = [
+    ["descriptor", src.value],
+
+    ["IPv4 header", `// 160 bits, best read 32 at a time.
+typedef struct packed {
+  logic [3:0]  version;
+  logic [3:0]  ihl;
+  logic [7:0]  tos;
+  logic [15:0] total_length;
+  logic [15:0] identification;
+  logic [2:0]  flags;
+  logic [12:0] frag_offset;
+  logic [7:0]  ttl;
+  logic [7:0]  protocol;
+  logic [15:0] checksum;
+  logic [31:0] src_addr;
+  logic [31:0] dst_addr;
+} ipv4_hdr_t;`],
+
+    ["LRM 7.2", `// IEEE 1800-2023 7.2.1: a packed structure of mixed integral types.
+struct packed signed {
+  int       a;
+  shortint  b;
+  byte      c;
+  bit [7:0] d;
+} pack1;`],
+
+    ["byte aligned", `// No packed keyword, so every member takes a whole word of its own.
+// The align and MSB/LSB switches above decide how much of one, and which end.
+typedef struct {
+  logic [2:0]  mode;
+  logic [11:0] count;
+  logic        en;
+  logic [15:0] tag;
+} cfg_t;`],
+
+    ["nested array", `typedef struct packed {
+  logic [7:0] lo;
+  logic [7:0] hi;
+} pair_t;
+
+typedef struct packed {
+  logic  [3:0] tag;
+  pair_t [3:0] slot;
+  logic [11:0] _spare;
+} bank_t;`],
+
+    ["reserved fields", `// Turn the underscore switch off to read this as a register map.
+localparam int TAG_W = 6;
+
+typedef struct packed {
+  logic [1:0]       fmt;
+  logic [TAG_W-1:0] tag;
+  logic [7:0]       _rsvd_hi;
+  logic [11:0]      length;
+  logic             ecc_en;
+  logic [10:0]      _rsvd_lo;
+  logic [23:0]      offset;
+} reg_ctrl_t;`],
+
+    ["RDL map", `// A register map read the other way round: switch the source syntax
+// back to SystemVerilog to get a packed struct out of it.
+addrmap gpio {
+    name = "gpio_t";
+
+    default regwidth = 32;
+    default sw = rw;
+    default hw = r;
+
+    reg {
+        desc = "gpio_t[31:0]";
+
+        field { desc = "direction"; } direction [31:16];
+        field { desc = "out_value"; } out_value [15: 0];
+    } gpio_0 @ 0x0;
+
+    reg {
+        desc = "gpio_t[63:32]";
+
+        field { desc = "irq_enable"; } irq_enable [23: 8];
+        field { desc = "irq_mode";   } irq_mode   [ 7: 4];
+    } gpio_1 @ 0x4;
+};`, "rdl"],
+
+    ["union", `typedef union packed {
+  logic [31:0] raw;
+  struct packed {
+    logic [15:0] hi;
+    logic [15:0] lo;
+  } halves;
+  struct packed {
+    logic [7:0] b3;
+    logic [7:0] b2;
+    logic [7:0] b1;
+    logic [7:0] b0;
+  } bytes;
+} word_t;`]
+  ];
+
+  const box = $("presets");
+  EXAMPLES.forEach(([name,text,lang]) => {
+    const b = el("button","",name);
+    b.type = "button";
+    b.addEventListener("click", () => {
+      setSyntax(lang || "sv", false);           // an example brings its own language
+      src.value = text;
+      src.scrollTop = 0; src.scrollLeft = 0;
+      sel.innerHTML = "";
+      render();
+    });
+    box.appendChild(b);
+  });
+
+  applySyntax();
+  render();
+})();
+</script>
+</body>
+</html>

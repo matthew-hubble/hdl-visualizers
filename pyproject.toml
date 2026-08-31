@@ -1,0 +1,33 @@
+[project]
+name = "fixed-point"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Matt Lowell", email = "matthew@hubble.com" }
+]
+requires-python = ">=3.13"
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "playwright>=1.40",
+    "systemrdl-compiler>=1.27",
+    "ruff>=0.6",
+    "mypy>=1.11",
+]
+
+[tool.ruff]
+line-length = 100
+
+[tool.mypy]
+python_version = "3.13"
+strict = true
+
+[project.scripts]
+fixed-point = "fixed_point:main"
+
+[build-system]
+requires = ["uv_build>=0.12.6,<0.13.0"]
+build-backend = "uv_build"

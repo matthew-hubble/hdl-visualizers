@@ -1,0 +1,159 @@
+/* Shared look and feel for the fixed-point pages.
+   Each page links this first, then overrides the few values it sizes differently. */
+
+:root{
+  --ground:#E7ECF1;
+  --panel:#FFFFFF;
+  --ink:#0D1720;
+  --ink2:#5C6F80;
+  --ink3:#8A9AA8;
+  --rule:#C7D2DC;
+  --rule2:#E2E9EF;
+  --sign:#6B45E0;
+  --int:#0B4FA6;
+  --frac:#0B8C8C;
+  --alert:#BE1A2E;
+  --alert-bg:#FBE9EB;
+  --warn:#8A6410;
+  --warn-bg:#FBF3E2;
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --sans:"Space Grotesk",-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+  --wrap:1000px;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{
+  background:var(--ground);color:var(--ink);font-family:var(--sans);
+  font-size:15px;line-height:1.45;-webkit-font-smoothing:antialiased;padding:28px 20px 72px;
+}
+.wrap{max-width:var(--wrap);margin:0 auto}
+
+/* ---------- header ---------- */
+header{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;flex-wrap:wrap;margin-bottom:18px}
+.eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink2)}
+h1{font-size:34px;line-height:1;letter-spacing:-.025em;font-weight:600;margin:6px 0 0}
+.lede{margin:8px 0 0;color:var(--ink2);max-width:52ch;font-size:14px}
+.stamp{
+  font-family:var(--mono);font-weight:600;font-size:22px;letter-spacing:.02em;
+  border:1.5px solid var(--ink);border-radius:3px;padding:8px 14px;background:var(--panel);
+  display:flex;align-items:baseline;gap:10px;white-space:nowrap;
+}
+.stamp small{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink2);font-weight:500}
+.stamp .to{color:var(--frac)}
+
+/* ---------- panels ---------- */
+.panel{background:var(--panel);border:1px solid var(--rule);border-radius:4px;padding:18px 20px;margin-bottom:14px}
+.panel + .panel{margin-top:0}
+.legendline{font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink3);margin:0 0 12px;display:flex;justify-content:space-between;gap:12px;align-items:center}
+.legendline .rt{letter-spacing:.06em;text-transform:none;color:var(--ink2)}
+
+/* ---------- controls ---------- */
+.row{display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end}
+.field{display:flex;flex-direction:column;gap:5px}
+.field label,.lbl{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink2)}
+input[type=text]{
+  font-family:var(--mono);font-size:16px;color:var(--ink);
+  background:#F7F9FB;border:1px solid var(--rule);border-radius:3px;padding:9px 11px;
+}
+input[type=text]:focus-visible,button:focus-visible,select:focus-visible,input[type=checkbox]:focus-visible,.slot:focus-visible,.cell:focus-visible{
+  outline:2px solid var(--int);outline-offset:1px;
+}
+.bad{border-color:var(--alert)!important;background:var(--alert-bg)!important}
+
+.spin{display:flex;align-items:stretch;border:1px solid var(--rule);border-radius:3px;overflow:hidden;background:#F7F9FB}
+.spin input{width:56px;border:0;background:transparent;font-family:var(--mono);font-size:16px;text-align:center;color:var(--ink);padding:8px 0;-moz-appearance:textfield}
+.spin input::-webkit-outer-spin-button,.spin input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+.spin button{border:0;background:transparent;color:var(--ink2);font-family:var(--mono);font-size:15px;width:26px;cursor:pointer}
+.spin button:hover{background:var(--rule2);color:var(--ink)}
+
+.check{display:flex;align-items:center;gap:8px;padding:9px 12px;border:1px solid var(--rule);border-radius:3px;background:#F7F9FB;cursor:pointer;user-select:none}
+.check input{width:16px;height:16px;accent-color:var(--sign);margin:0}
+.check span{font-family:var(--mono);font-size:13px;letter-spacing:.04em}
+.check.auto input{accent-color:var(--frac)}
+
+.seg{display:flex;border:1px solid var(--rule);border-radius:3px;overflow:hidden}
+.seg button{
+  border:0;background:#F7F9FB;color:var(--ink2);cursor:pointer;
+  font-family:var(--mono);font-size:12px;padding:9px 11px;letter-spacing:.02em;
+}
+.seg button + button{border-left:1px solid var(--rule)}
+.seg button[aria-pressed=true]{background:var(--ink);color:#fff}
+.seg button:hover:not([aria-pressed=true]):not(:disabled){background:var(--rule2);color:var(--ink)}
+
+/* ---------- bit ruler ----------
+   Cells and gaps only pick up pointer affordances when the page wires them up,
+   which it signals with the `act` class. */
+.ruler{display:flex;flex-wrap:wrap;gap:0 10px;align-items:flex-start;padding:4px 0 2px}
+.grp{display:flex;flex-direction:column;align-items:stretch;margin-bottom:12px}
+.grow{display:flex;align-items:stretch}
+.cell{
+  width:23px;border:0;background:transparent;padding:0;font:inherit;
+  display:flex;flex-direction:column;align-items:center;gap:2px;border-radius:2px;
+}
+.cell.act{cursor:pointer}
+.cell .b{
+  font-family:var(--mono);font-size:19px;font-weight:500;line-height:1.35;width:100%;text-align:center;
+  border-bottom:2px solid currentColor;color:var(--ink);
+}
+.cell .w{font-family:var(--mono);font-size:9px;color:var(--ink3);height:12px;white-space:nowrap;letter-spacing:-.02em}
+.cell .w sup{font-size:8px}
+.cell.sign{color:var(--sign)}
+.cell.int{color:var(--int)}
+.cell.frac{color:var(--frac)}
+.cell.zero .b{color:var(--ink3)}
+.cell.act:hover .b{background:var(--rule2)}
+.cell.flash .b{animation:flash .5s ease-out}
+@keyframes flash{from{background:#FFE9A8}to{background:transparent}}
+.hexd{
+  font-family:var(--mono);font-size:11px;color:var(--ink2);text-align:center;margin-top:5px;
+  border-top:1px solid var(--rule2);padding-top:3px;letter-spacing:.1em;
+}
+.slot{width:9px;border:0;background:transparent;padding:0;position:relative;align-self:stretch;margin-bottom:12px;border-radius:2px}
+.slot.act{cursor:col-resize}
+.slot::after{content:"";position:absolute;left:4px;top:2px;bottom:12px;width:1px;background:transparent}
+.slot.act:hover::after{background:var(--rule)}
+.slot.on::after{background:var(--ink);width:2px;left:3px;bottom:10px}
+.slot.on::before{content:"";position:absolute;left:0;bottom:4px;width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-bottom:5px solid var(--ink)}
+
+/* compact variant, for rulers that sit inside a control panel */
+.ruler.mini{gap:0 8px;padding-top:2px}
+.ruler.mini .cell{width:17px}
+.ruler.mini .cell .b{font-size:15px;border-bottom-width:2px}
+.ruler.mini .cell .w{display:none}
+.ruler.mini .slot{margin-bottom:10px}
+.ruler.mini .slot::after{bottom:10px}
+.ruler.mini .slot.on::before{bottom:3px}
+.ruler.mini .hexd{font-size:9px;margin-top:3px}
+
+.fields{display:flex;gap:16px;flex-wrap:wrap;margin-top:2px}
+.fkey{display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:11px;color:var(--ink2)}
+.sw{width:10px;height:10px;border-radius:2px;display:inline-block}
+.hint{font-family:var(--mono);font-size:11px;color:var(--ink3);letter-spacing:.02em;text-transform:none}
+
+/* ---------- results ---------- */
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+dl{margin:0;display:grid;grid-template-columns:minmax(120px,auto) 1fr;gap:0}
+dt{font-family:var(--mono);font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:var(--ink2);padding:9px 12px 9px 0;border-top:1px solid var(--rule2);align-self:stretch;display:flex;align-items:center}
+dd{margin:0;font-family:var(--mono);font-size:14px;padding:9px 0;border-top:1px solid var(--rule2);overflow-wrap:anywhere;display:flex;align-items:center;gap:8px}
+dl > dt:first-of-type,dl > dt:first-of-type + dd{border-top:0}
+.big{font-size:20px;font-weight:500}
+.dim{color:var(--ink3)}
+.copy{
+  border:1px solid var(--rule2);background:transparent;color:var(--ink3);border-radius:2px;
+  font-family:var(--mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;padding:3px 6px;cursor:pointer;flex:none;
+}
+.copy:hover{border-color:var(--ink2);color:var(--ink)}
+.faded{opacity:.32;pointer-events:none}
+
+footer{font-family:var(--mono);font-size:11px;color:var(--ink3);line-height:1.7;margin-top:22px}
+footer b{color:var(--ink2);font-weight:500}
+
+@media (max-width:760px){
+  body{padding:20px 14px 56px}
+  h1{font-size:26px}
+  .cell{width:19px}
+  .cell .b{font-size:16px}
+}
+@media (prefers-reduced-motion:reduce){
+  .cell.flash .b{animation:none}
+}

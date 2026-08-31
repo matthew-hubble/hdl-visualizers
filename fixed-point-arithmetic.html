@@ -1,0 +1,623 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Fixed-point arithmetic — Q format operands</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="fixed-point.css">
+<style>
+/* This page packs more controls per row than the converter, so it runs a
+   slightly denser version of the shared scale. */
+:root{--wrap:1060px}
+.lede{max-width:56ch}
+.stamp{font-size:17px;letter-spacing:.01em;padding:9px 14px;gap:9px}
+.row{gap:12px}
+input[type=text]{font-size:15px;padding:8px 10px}
+.vin{font-size:24px;font-weight:500;width:100%}
+.qin{width:104px;text-transform:uppercase}
+.rin{width:100%}
+.spin input{width:50px;font-size:15px}
+.spin button{width:24px}
+
+/* equation row */
+.eq{display:grid;grid-template-columns:1fr 104px 1fr;gap:14px;align-items:start;margin-bottom:14px}
+.eq .panel{margin-bottom:0}
+.opwrap{display:flex;flex-direction:column;gap:6px;align-items:center;padding-top:64px}
+.opwrap .lbl{text-align:center}
+select#op{
+  -webkit-appearance:none;appearance:none;
+  font-family:var(--mono);font-size:30px;line-height:1;text-align:center;text-align-last:center;
+  width:104px;padding:14px 0;color:var(--ink);
+  background:var(--panel);border:1.5px solid var(--ink);border-radius:3px;cursor:pointer;
+}
+select#op:hover{background:var(--rule2)}
+
+/* result */
+.rulebar{
+  font-family:var(--mono);font-size:12px;color:var(--ink2);background:#F7F9FB;
+  border:1px dashed var(--rule);border-radius:3px;padding:9px 12px;margin-top:14px;line-height:1.6;
+}
+.rulebar b{color:var(--ink);font-weight:500}
+
+#notes{display:flex;flex-direction:column;gap:8px;margin-bottom:14px}
+#notes:empty{display:none}
+.note{display:flex;gap:10px;align-items:baseline;border-radius:3px;padding:9px 13px;font-size:13px}
+.note b{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;flex:none}
+.note.alert{border:1px solid var(--alert);background:var(--alert-bg);color:var(--alert)}
+.note.warn{border:1px solid var(--warn);background:var(--warn-bg);color:var(--warn)}
+.off{display:none}
+.manual.locked{opacity:.4}
+
+footer table{border-collapse:collapse;margin:8px 0 10px}
+footer td{padding:2px 22px 2px 0;color:var(--ink3)}
+footer td:first-child{color:var(--ink2)}
+
+@media (max-width:860px){
+  .eq{grid-template-columns:1fr}
+  .opwrap{padding-top:0;flex-direction:row;align-items:center;gap:12px;justify-content:center}
+  select#op{width:120px;font-size:24px;padding:10px 0}
+  .grid{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div>
+      <div class="eyebrow">TI Q format · two-operand arithmetic</div>
+      <h1>Fixed-point arithmetic</h1>
+      <p class="lede">Give two words a format and a value, pick an operation, and read the result word. Auto precision grows the result format so nothing is lost; set it yourself to see what a narrower word costs.</p>
+    </div>
+    <div class="stamp"><span id="s-a">Q0.15</span><span id="s-op">×</span><span id="s-b">Q0.15</span><span class="to">→</span><span id="s-r">Q1.30</span></div>
+  </header>
+
+  <div id="notes" role="status" aria-live="polite"></div>
+
+  <!-- OPERANDS -->
+  <div class="eq">
+    <section class="panel" id="a-panel">
+      <p class="legendline"><span>Operand A</span><span class="rt" id="a-stamp">16-bit signed</span></p>
+      <div class="field"><label for="a-val">Decimal value</label><input type="text" id="a-val" class="vin" value="0.6" spellcheck="false" autocomplete="off" inputmode="decimal"></div>
+      <div class="row" style="margin-top:12px">
+        <div class="field"><label for="a-q">Q format</label><input type="text" id="a-q" class="qin" value="Q0.15" spellcheck="false" autocomplete="off"></div>
+        <div class="field"><span class="lbl">Sign bit</span><label class="check"><input type="checkbox" id="a-signed" checked><span>signed</span></label></div>
+      </div>
+      <div class="row" style="margin-top:12px">
+        <div class="field"><label for="a-m">Integer bits m</label><div class="spin"><button type="button" data-step="a,m,-1" aria-label="A: fewer integer bits">−</button><input type="number" id="a-m" value="0" min="0" max="64"><button type="button" data-step="a,m,1" aria-label="A: more integer bits">+</button></div></div>
+        <div class="field"><label for="a-n">Fraction bits n</label><div class="spin"><button type="button" data-step="a,n,-1" aria-label="A: fewer fraction bits">−</button><input type="number" id="a-n" value="15" min="0" max="64"><button type="button" data-step="a,n,1" aria-label="A: more fraction bits">+</button></div></div>
+      </div>
+      <div class="row" style="margin-top:12px">
+        <div class="field"><span class="lbl">Rounding</span>
+          <div class="seg" id="a-round">
+            <button type="button" data-v="near" aria-pressed="true">nearest</button>
+            <button type="button" data-v="trunc" aria-pressed="false">toward zero</button>
+            <button type="button" data-v="floor" aria-pressed="false">floor</button>
+          </div>
+        </div>
+      </div>
+      <div class="field" style="margin-top:12px"><label for="a-raw">Stored word</label><input type="text" id="a-raw" class="rin" spellcheck="false" autocomplete="off"></div>
+      <div class="ruler mini" id="a-ruler"></div>
+    </section>
+
+    <div class="opwrap">
+      <label class="lbl" for="op">Operation</label>
+      <select id="op">
+        <option value="add">+</option>
+        <option value="sub">−</option>
+        <option value="mul" selected>×</option>
+        <option value="div">÷</option>
+      </select>
+    </div>
+
+    <section class="panel" id="b-panel">
+      <p class="legendline"><span>Operand B</span><span class="rt" id="b-stamp">16-bit signed</span></p>
+      <div class="field"><label for="b-val">Decimal value</label><input type="text" id="b-val" class="vin" value="0.25" spellcheck="false" autocomplete="off" inputmode="decimal"></div>
+      <div class="row" style="margin-top:12px">
+        <div class="field"><label for="b-q">Q format</label><input type="text" id="b-q" class="qin" value="Q0.15" spellcheck="false" autocomplete="off"></div>
+        <div class="field"><span class="lbl">Sign bit</span><label class="check"><input type="checkbox" id="b-signed" checked><span>signed</span></label></div>
+      </div>
+      <div class="row" style="margin-top:12px">
+        <div class="field"><label for="b-m">Integer bits m</label><div class="spin"><button type="button" data-step="b,m,-1" aria-label="B: fewer integer bits">−</button><input type="number" id="b-m" value="0" min="0" max="64"><button type="button" data-step="b,m,1" aria-label="B: more integer bits">+</button></div></div>
+        <div class="field"><label for="b-n">Fraction bits n</label><div class="spin"><button type="button" data-step="b,n,-1" aria-label="B: fewer fraction bits">−</button><input type="number" id="b-n" value="15" min="0" max="64"><button type="button" data-step="b,n,1" aria-label="B: more fraction bits">+</button></div></div>
+      </div>
+      <div class="row" style="margin-top:12px">
+        <div class="field"><span class="lbl">Rounding</span>
+          <div class="seg" id="b-round">
+            <button type="button" data-v="near" aria-pressed="true">nearest</button>
+            <button type="button" data-v="trunc" aria-pressed="false">toward zero</button>
+            <button type="button" data-v="floor" aria-pressed="false">floor</button>
+          </div>
+        </div>
+      </div>
+      <div class="field" style="margin-top:12px"><label for="b-raw">Stored word</label><input type="text" id="b-raw" class="rin" spellcheck="false" autocomplete="off"></div>
+      <div class="ruler mini" id="b-ruler"></div>
+    </section>
+  </div>
+
+  <!-- RESULT FORMAT -->
+  <section class="panel">
+    <p class="legendline"><span>Result format</span><span class="rt" id="r-stamp">32-bit signed</span></p>
+    <div class="row">
+      <div class="field"><span class="lbl">Precision</span>
+        <label class="check auto"><input type="checkbox" id="r-auto" checked><span>automatic</span></label>
+      </div>
+      <div class="field manual"><label for="r-q">Q format</label><input type="text" id="r-q" class="qin" value="Q1.30" spellcheck="false" autocomplete="off"></div>
+      <div class="field manual"><span class="lbl">Sign bit</span><label class="check"><input type="checkbox" id="r-signed" checked><span>signed</span></label></div>
+      <div class="field manual"><label for="r-m">Integer bits m</label><div class="spin"><button type="button" data-step="r,m,-1" aria-label="Result: fewer integer bits">−</button><input type="number" id="r-m" value="1" min="0" max="64"><button type="button" data-step="r,m,1" aria-label="Result: more integer bits">+</button></div></div>
+      <div class="field manual"><label for="r-n">Fraction bits n</label><div class="spin"><button type="button" data-step="r,n,-1" aria-label="Result: fewer fraction bits">−</button><input type="number" id="r-n" value="30" min="0" max="64"><button type="button" data-step="r,n,1" aria-label="Result: more fraction bits">+</button></div></div>
+      <div class="field manual"><span class="lbl">Rounding</span>
+        <div class="seg" id="r-round">
+          <button type="button" data-v="near" aria-pressed="true">nearest</button>
+          <button type="button" data-v="trunc" aria-pressed="false">toward zero</button>
+          <button type="button" data-v="floor" aria-pressed="false">floor</button>
+        </div>
+      </div>
+      <div class="field manual"><span class="lbl">On overflow</span>
+        <div class="seg" id="r-ovf">
+          <button type="button" data-v="sat" aria-pressed="true">saturate</button>
+          <button type="button" data-v="wrap" aria-pressed="false">wrap</button>
+        </div>
+      </div>
+    </div>
+    <div class="rulebar" id="r-rule"></div>
+  </section>
+
+  <!-- RESULT WORD -->
+  <section class="panel" id="r-rulerpanel">
+    <p class="legendline"><span id="r-title">The result word</span><span class="hint" id="r-hint">click a gap to move the binary point</span></p>
+    <div class="ruler" id="r-ruler"></div>
+    <div class="fields">
+      <span class="fkey" id="r-key-sign"><i class="sw" style="background:var(--sign)"></i> sign · 1 bit</span>
+      <span class="fkey"><i class="sw" style="background:var(--int)"></i> <span id="r-key-int">integer · m = 1</span></span>
+      <span class="fkey"><i class="sw" style="background:var(--frac)"></i> <span id="r-key-frac">fraction · n = 30</span></span>
+    </div>
+  </section>
+
+  <div class="grid" id="r-frames">
+    <section class="panel">
+      <p class="legendline"><span>Stored word</span><span class="rt" id="r-fmt1">Q1.30</span></p>
+      <dl>
+        <dt>Integer</dt><dd><span id="r-int">—</span><button class="copy" data-copy="r-int">copy</button></dd>
+        <dt>Hex</dt><dd><span class="big" id="r-hex">—</span><button class="copy" data-copy="r-hex">copy</button></dd>
+        <dt>Binary</dt><dd><span id="r-bin">—</span><button class="copy" data-copy="r-bin">copy</button></dd>
+        <dt>C</dt><dd><span id="r-c">—</span><button class="copy" data-copy="r-c">copy</button></dd>
+      </dl>
+    </section>
+    <section class="panel">
+      <p class="legendline"><span>What it represents</span><span class="rt" id="r-fmt2">Q1.30</span></p>
+      <dl>
+        <dt>Value</dt><dd><span class="big" id="r-val">—</span></dd>
+        <dt>Float64</dt><dd><span id="r-float">—</span></dd>
+        <dt>Error</dt><dd><span id="r-err">—</span></dd>
+        <dt>Relative</dt><dd><span id="r-rel">—</span></dd>
+        <dt>1 LSB</dt><dd><span id="r-lsb">—</span></dd>
+        <dt>Range</dt><dd><span id="r-range">—</span></dd>
+      </dl>
+    </section>
+  </div>
+
+  <!-- REMAINDER (division only) -->
+  <div id="x-section" class="off">
+    <section class="panel">
+      <p class="legendline"><span>Remainder word</span><span class="hint">A = quotient × B + remainder, exactly</span></p>
+      <div class="ruler" id="x-ruler"></div>
+      <div class="fields">
+        <span class="fkey" id="x-key-sign"><i class="sw" style="background:var(--sign)"></i> sign · 1 bit</span>
+        <span class="fkey"><i class="sw" style="background:var(--int)"></i> <span id="x-key-int">integer · m = 0</span></span>
+        <span class="fkey"><i class="sw" style="background:var(--frac)"></i> <span id="x-key-frac">fraction · n = 0</span></span>
+      </div>
+    </section>
+    <div class="grid">
+      <section class="panel">
+        <p class="legendline"><span>Stored word</span><span class="rt" id="x-fmt1">—</span></p>
+        <dl>
+          <dt>Integer</dt><dd><span id="x-int">—</span><button class="copy" data-copy="x-int">copy</button></dd>
+          <dt>Hex</dt><dd><span class="big" id="x-hex">—</span><button class="copy" data-copy="x-hex">copy</button></dd>
+          <dt>Binary</dt><dd><span id="x-bin">—</span><button class="copy" data-copy="x-bin">copy</button></dd>
+          <dt>C</dt><dd><span id="x-c">—</span><button class="copy" data-copy="x-c">copy</button></dd>
+        </dl>
+      </section>
+      <section class="panel">
+        <p class="legendline"><span>What it represents</span><span class="rt" id="x-fmt2">—</span></p>
+        <dl>
+          <dt>Value</dt><dd><span class="big" id="x-val">—</span></dd>
+          <dt>Identity</dt><dd><span id="x-id">—</span></dd>
+          <dt>1 LSB</dt><dd><span id="x-lsb">—</span></dd>
+          <dt>Range</dt><dd><span id="x-range">—</span></dd>
+        </dl>
+      </section>
+    </div>
+  </div>
+
+  <footer>
+    <b>Automatic precision.</b> The result format follows the usual bit-growth rules, so the answer is exact for +, − and ×:
+    <table>
+      <tr><td>A + B, A − B</td><td>n = max(nA, nB)</td><td>m = max(mA, mB) + 1</td></tr>
+      <tr><td>A × B</td><td>n = nA + nB</td><td>m = mA + mB (+1 if both signed)</td></tr>
+      <tr><td>A ÷ B</td><td>n = nA + mB</td><td>m = mA + nB</td></tr>
+    </table>
+    Division is the exception: a quotient is rarely exact in any finite word, so the leftover is reported as a remainder in its own smallest exact format. Subtraction always produces a signed result; otherwise the result is signed if either operand is.<br>
+    <b>TI convention.</b> Q<i>m</i>.<i>n</i> is m integer bits and n fraction bits, plus a sign bit when signed — m+n+1 bits wide, or m+n unsigned. Words are capped at 64 bits; if a growth format would exceed that, the page falls back and says so.
+  </footer>
+</div>
+
+<script src="fixed-point.js"></script>
+<script>
+"use strict";
+(function(){
+  const $ = id => document.getElementById(id);
+  const {pow2, abs, parseDecimal, quantize, exactDec, ratSci, fmtVal, dblRat, ratExactDec,
+         wOf, fits, loOf, hiOf, qStr, clampRaw, wrapRaw, minimalFor, divFitFor, clampFmt,
+         parseQ, clampInt, parseWord, cLine, groupBits, lsbText, rangeText,
+         drawRuler, flipBit, press} = FP;
+
+  /* ---------- clearing ---------- */
+  function blankResult(){
+    ["r-int","r-hex","r-bin","r-c","r-val","r-float","r-err","r-rel","r-lsb","r-range",
+     "x-int","x-hex","x-bin","x-c","x-val","x-id","x-lsb","x-range"].forEach(k => $(k).textContent = "—");
+    ["s-r","r-stamp","r-fmt1","r-fmt2","x-fmt1","x-fmt2"].forEach(k => $(k).textContent = "—");
+    $("r-rule").textContent = "Waiting on a complete pair of operands.";
+    $("r-ruler").innerHTML = ""; $("r-ruler")._prev = "";
+    $("x-ruler").innerHTML = ""; $("x-ruler")._prev = "";
+  }
+
+  /* ---------- notes ---------- */
+  let notes = [];
+  const note = (kind,label,msg) => notes.push({kind,label,msg});
+  function drawNotes(){
+    const box = $("notes"); box.innerHTML = "";
+    for(const nt of notes){
+      const d = document.createElement("div");
+      d.className = "note " + nt.kind;
+      d.innerHTML = "<b></b><span></span>";
+      d.firstChild.textContent = nt.label;
+      d.lastChild.textContent = nt.msg;
+      box.appendChild(d);
+    }
+  }
+
+  /* ---------- operands ---------- */
+  function Operand(id,name,defM,defN,defVal){
+    const o = {
+      id, name, m:defM, n:defN, signed:true, rounding:"near", raw:0n, rat:null, ok:true,
+      val:$(id+"-val"), q:$(id+"-q"), sgn:$(id+"-signed"), me:$(id+"-m"), ne:$(id+"-n"),
+      rnd:$(id+"-round"), rawin:$(id+"-raw"), ruler:$(id+"-ruler"), stamp:$(id+"-stamp")
+    };
+    o.fmt = () => ({m:o.m, n:o.n, signed:o.signed});
+
+    o.val.addEventListener("input", () => { o.src="val"; recalc(); });
+    o.q.addEventListener("input", () => {
+      const p = parseQ(o.q.value);
+      if(!p){ o.q.classList.add("bad"); return; }
+      o.q.classList.remove("bad");
+      o.m = p.m; o.n = p.n; o.me.value = p.m; o.ne.value = p.n;
+      o.src="val"; recalc();
+    });
+    o.sgn.addEventListener("change", () => { o.signed = o.sgn.checked; o.src="val"; recalc(); });
+    o.me.addEventListener("input", () => { o.m = clampInt(o.me.value); o.q.value = qStr(o.fmt()); o.src="val"; recalc(); });
+    o.ne.addEventListener("input", () => { o.n = clampInt(o.ne.value); o.q.value = qStr(o.fmt()); o.src="val"; recalc(); });
+    o.rnd.addEventListener("click", e => {
+      const b = e.target.closest("button"); if(!b) return;
+      o.rounding = b.dataset.v; press(o.rnd,b); o.src="val"; recalc();
+    });
+    o.rawin.addEventListener("input", () => {
+      const v = parseWord(o.rawin.value, o.fmt());
+      if(v===null){ o.rawin.classList.add("bad"); return; }
+      o.rawin.classList.remove("bad");
+      o.raw = v; o.src="raw"; recalc();
+    });
+    o.setFormat = (nm,nn) => {
+      o.m = Math.max(0,Math.min(64,nm)); o.n = Math.max(0,Math.min(64,nn));
+      o.me.value = o.m; o.ne.value = o.n; o.q.value = qStr(o.fmt());
+      o.src="val"; recalc();
+    };
+    o.val.value = defVal;
+    o.src = "val";
+    return o;
+  }
+
+  const A = Operand("a","A",0,15,"0.6");
+  const B = Operand("b","B",0,15,"0.25");
+
+  function syncOperand(o){
+    const f = o.fmt();
+    o.stamp.textContent = wOf(f) + "-bit " + (f.signed?"signed":"unsigned");
+    o.ok = fits(f);
+    if(!o.ok){
+      note("alert","Operand "+o.name, "Q"+o.m+"."+o.n+" "+(f.signed?"signed":"unsigned")+" is "+wOf(f)+" bits. Keep the word between 1 and 64 bits.");
+      o.ruler.innerHTML = ""; o.ruler._prev = "";
+      return;
+    }
+    if(o.src === "val"){
+      const r = parseDecimal(o.val.value);
+      o.rat = r;
+      o.val.classList.toggle("bad", !r);
+      if(!r){
+        note("alert","Operand "+o.name, "Enter a decimal number, like −0.375 or 2.5e-3.");
+      } else {
+        const q = quantize(r.p, r.q, o.n, o.rounding);
+        if(q > hiOf(f) || q < loOf(f)){
+          o.raw = clampRaw(q,f);
+          note("warn","Operand "+o.name, o.val.value.trim()+" does not fit "+qStr(f)+" — saturated to "+fmtVal(o.raw,o.n,20)+".");
+        } else o.raw = q;
+      }
+    } else {
+      o.raw = clampRaw(o.raw,f);
+      const txt = exactDec(o.raw,o.n);
+      o.val.value = txt; o.val.classList.remove("bad");
+      o.rat = parseDecimal(txt);
+    }
+    if(document.activeElement !== o.rawin) o.rawin.value = o.raw.toString();
+    drawRuler(o.ruler, o.raw, f, {
+      mini:true, bits:true, slots:true,
+      onBit:(i,w) => { o.raw = flipBit(o.raw,i,w,o.signed); o.src = "raw"; recalc(); },
+      onPoint:(mm,nn) => o.setFormat(mm,nn)
+    });
+  }
+
+  /* ---------- result format ---------- */
+  const R = { auto:true, m:1, n:30, signed:true, rounding:"near", ovf:"sat" };
+  R.fmt = () => ({m:R.m, n:R.n, signed:R.signed});
+
+  $("r-auto").addEventListener("change", () => { R.auto = $("r-auto").checked; recalc(); });
+  $("r-q").addEventListener("input", () => {
+    const p = parseQ($("r-q").value);
+    if(!p){ $("r-q").classList.add("bad"); return; }
+    $("r-q").classList.remove("bad");
+    R.m = p.m; R.n = p.n; $("r-m").value = p.m; $("r-n").value = p.n; recalc();
+  });
+  $("r-signed").addEventListener("change", () => { R.signed = $("r-signed").checked; recalc(); });
+  $("r-m").addEventListener("input", () => { R.m = clampInt($("r-m").value); $("r-q").value = qStr(R.fmt()); recalc(); });
+  $("r-n").addEventListener("input", () => { R.n = clampInt($("r-n").value); $("r-q").value = qStr(R.fmt()); recalc(); });
+  $("r-round").addEventListener("click", e => {
+    const b = e.target.closest("button"); if(!b) return;
+    R.rounding = b.dataset.v; press($("r-round"),b); recalc();
+  });
+  $("r-ovf").addEventListener("click", e => {
+    const b = e.target.closest("button"); if(!b) return;
+    R.ovf = b.dataset.v; press($("r-ovf"),b); recalc();
+  });
+  $("op").addEventListener("change", recalc);
+
+  document.querySelectorAll("[data-step]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const [who,which,d] = btn.dataset.step.split(",");
+      const step = parseInt(d,10);
+      if(who==="r"){
+        if(which==="m") R.m = Math.max(0,Math.min(64,R.m+step)); else R.n = Math.max(0,Math.min(64,R.n+step));
+        $("r-m").value = R.m; $("r-n").value = R.n; $("r-q").value = qStr(R.fmt()); recalc();
+      } else {
+        const o = who==="a" ? A : B;
+        if(which==="m") o.setFormat(o.m+step, o.n); else o.setFormat(o.m, o.n+step);
+      }
+    });
+  });
+
+  FP.initCopyButtons();
+
+  /* ---------- growth rules ---------- */
+  function growth(op,fa,fb){
+    const sa = fa.signed, sb = fb.signed;
+    if(op==="add" || op==="sub"){
+      const n = Math.max(fa.n,fb.n), m = Math.max(fa.m,fb.m)+1;
+      return {m,n,signed: op==="sub" ? true : (sa||sb),
+              rule:"n = max(nA, nB) = "+n+"   ·   m = max(mA, mB) + 1 = "+m};
+    }
+    if(op==="mul"){
+      const n = fa.n+fb.n, extra = (sa&&sb)?1:0, m = fa.m+fb.m+extra;
+      return {m,n,signed: sa||sb,
+              rule:"n = nA + nB = "+n+"   ·   m = mA + mB"+(extra?" + 1":"")+" = "+m};
+    }
+    const n = fa.n+fb.m, m = fa.m+fb.n;
+    return {m,n,signed: sa||sb, rule:"n = nA + mB = "+n+"   ·   m = mA + nB = "+m};
+  }
+
+  /* ---------- main ---------- */
+  function recalc(){
+    notes = [];
+    syncOperand(A); syncOperand(B);
+    A.src = "val"; B.src = "val";
+
+    const op = $("op").value;
+    const glyph = {add:"+",sub:"−",mul:"×",div:"÷"}[op];
+    $("s-op").textContent = glyph;
+    $("s-a").textContent = qStr(A.fmt());
+    $("s-b").textContent = qStr(B.fmt());
+
+    const lock = R.auto;
+    document.querySelectorAll(".manual").forEach(el => {
+      el.classList.toggle("locked", lock);
+      el.querySelectorAll("input,button").forEach(c => c.disabled = lock);
+    });
+    $("r-hint").textContent = lock ? "format set automatically" : "click a gap to move the binary point";
+    $("x-section").classList.toggle("off", op!=="div");
+    $("r-title").textContent = op==="div" ? "The quotient word" : "The result word";
+
+    const good = A.ok && B.ok && A.rat && B.rat;
+    $("r-rulerpanel").classList.toggle("faded", !good);
+    $("r-frames").classList.toggle("faded", !good);
+    $("x-section").classList.toggle("faded", !good);
+    if(!good){ blankResult(); drawNotes(); return; }
+
+    const fa = A.fmt(), fb = B.fmt();
+
+    // exact answer as a rational, and (for +,-,x) as F / 2^K
+    let target = null, F = 0n, K = 0, divzero = false;
+    if(op==="div"){
+      if(B.raw === 0n){ divzero = true; }
+      else {
+        let p = A.raw * pow2(fb.n), q = B.raw * pow2(fa.n);
+        if(q < 0n){ p = -p; q = -q; }
+        target = {p,q};
+      }
+    } else {
+      K = op==="mul" ? fa.n+fb.n : Math.max(fa.n,fb.n);
+      if(op==="mul") F = A.raw * B.raw;
+      else {
+        const av = A.raw * pow2(K-fa.n), bv = B.raw * pow2(K-fb.n);
+        F = op==="add" ? av+bv : av-bv;
+      }
+      target = {p:F, q:pow2(K)};
+    }
+
+    if(divzero){
+      note("alert","Divide by zero","Operand B is zero. Give it a non-zero value to get a quotient.");
+      $("r-rulerpanel").classList.add("faded"); $("r-frames").classList.add("faded"); $("x-section").classList.add("faded");
+      blankResult(); $("r-rule").textContent = "No quotient while the divisor is zero.";
+      drawNotes(); return;
+    }
+
+    // choose the result format
+    const g = growth(op,fa,fb);
+    let ruleTxt;
+    if(R.auto){
+      let chosen;
+      if(fits(g)){ chosen = {m:g.m,n:g.n,signed:g.signed}; ruleTxt = g.rule; }
+      else if(op!=="div" && fits(minimalFor(F,K,g.signed))){
+        chosen = minimalFor(F,K,g.signed);
+        ruleTxt = g.rule + "  →  " + wOf(g) + " bits, too wide";
+        note("warn","Auto format","Full precision would need "+qStr(g)+" at "+wOf(g)+" bits. Using "+qStr(chosen)+", the smallest format that still holds this result exactly.");
+      } else if(op==="div" && fits(divFitFor(target.p,target.q,g.signed,g.n))){
+        chosen = divFitFor(target.p,target.q,g.signed,g.n);
+        ruleTxt = g.rule + "  →  " + wOf(g) + " bits, too wide";
+        note("warn","Auto format","Full precision would need "+qStr(g)+" at "+wOf(g)+" bits. Using "+qStr(chosen)+", sized to this quotient — what is left over is in the remainder.");
+      } else {
+        chosen = clampFmt(g);
+        ruleTxt = g.rule + "  →  " + wOf(g) + " bits, clamped to 64";
+        note("warn","Auto format","Full precision would need "+qStr(g)+" at "+wOf(g)+" bits. Clamped to "+qStr(chosen)+", so the result is rounded.");
+      }
+      R.m = chosen.m; R.n = chosen.n; R.signed = chosen.signed;
+      $("r-m").value = R.m; $("r-n").value = R.n; $("r-q").value = qStr(R.fmt());
+      $("r-signed").checked = R.signed;
+      $("r-q").classList.remove("bad");
+    } else {
+      ruleTxt = "Manual · full precision would be " + qStr(g) + " at " + wOf(g) + " bits";
+    }
+
+    const fr = R.fmt();
+    if(!fits(fr)){
+      note("alert","Result format","Q"+R.m+"."+R.n+" "+(fr.signed?"signed":"unsigned")+" is "+wOf(fr)+" bits. Keep the word between 1 and 64 bits.");
+      $("r-rulerpanel").classList.add("faded"); $("r-frames").classList.add("faded"); $("x-section").classList.add("faded");
+      drawNotes(); return;
+    }
+
+    // quantize into the result format
+    let raw = quantize(target.p, target.q, fr.n, R.rounding);
+    if(raw > hiOf(fr) || raw < loOf(fr)){
+      const before = raw;
+      raw = R.ovf==="sat" ? clampRaw(raw,fr) : wrapRaw(raw,fr);
+      note("alert","Overflow", qStr(fr)+" runs from "+fmtVal(loOf(fr),fr.n,20)+" to "+fmtVal(hiOf(fr),fr.n,20)+
+        ". The answer "+ratSci(before,pow2(fr.n),8,true)+" was "+(R.ovf==="sat"?"saturated to the limit.":"wrapped around the word."));
+    }
+
+    // ----- result frames -----
+    $("r-stamp").textContent = wOf(fr)+"-bit "+(fr.signed?"signed":"unsigned");
+    $("s-r").textContent = qStr(fr);
+    $("r-fmt1").textContent = qStr(fr);
+    $("r-fmt2").textContent = qStr(fr);
+    $("r-rule").innerHTML = "";
+    const rb = document.createElement("span");
+    rb.textContent = ruleTxt;
+    $("r-rule").appendChild(rb);
+    const tight = (op!=="div") ? minimalFor(F,K,fr.signed) : null;
+    if(tight && wOf(tight) < wOf(fr)){
+      const extra = document.createElement("span");
+      extra.textContent = "   ·   this value alone fits " + qStr(tight);
+      extra.className = "dim";
+      $("r-rule").appendChild(extra);
+    }
+    $("r-key-int").textContent = "integer · m = " + fr.m;
+    $("r-key-frac").textContent = "fraction · n = " + fr.n;
+    $("r-key-sign").style.display = fr.signed ? "" : "none";
+
+    const rr = drawRuler($("r-ruler"), raw, fr, {
+      mini:false, bits:false, slots:!R.auto, weights:"nibble",
+      onPoint:(mm,nn) => { R.m=mm; R.n=nn; $("r-m").value=mm; $("r-n").value=nn; $("r-q").value=qStr(R.fmt()); recalc(); }
+    });
+    $("r-int").textContent = raw.toString();
+    $("r-hex").textContent = rr.hex;
+    $("r-bin").textContent = groupBits(rr.bits);
+    $("r-c").textContent = cLine(raw,fr);
+    $("r-val").textContent = exactDec(raw,fr.n);
+    $("r-lsb").textContent = lsbText(fr.n);
+    $("r-range").textContent = rangeText(fr);
+
+    // reference: the same operation carried out in double precision on the decimals you typed
+    const toD = o => Number(o.val.value.trim().replace(/[_,\s]/g,""));
+    const aD = toD(A), bD = toD(B);
+    const rD = op==="add" ? aD+bD : op==="sub" ? aD-bD : op==="mul" ? aD*bD : aD/bD;
+    const ref = dblRat(rD);
+    if(ref){
+      $("r-float").textContent = String(rD);
+      const full = ratExactDec(ref.p, ref.q);
+      $("r-float").title = "double " + String(aD) + " " + glyph + " " + String(bD) +
+        (full && full.length <= 400 ? ", exactly " + full : "");
+    } else {
+      $("r-float").textContent = "—";
+      $("r-float").title = "";
+    }
+
+    if(!ref){
+      $("r-err").textContent = "—"; $("r-rel").textContent = "—";
+    } else {
+      const errNum = raw*ref.q - ref.p*pow2(fr.n);   // over ref.q * 2^n
+      if(errNum === 0n){
+        $("r-err").innerHTML = '<span class="dim">0 — matches the float result</span>';
+        $("r-rel").innerHTML = '<span class="dim">0</span>';
+      } else {
+        $("r-err").textContent = (errNum>0n?"+":"") + ratSci(errNum, ref.q*pow2(fr.n), 6) +
+                                 "   (" + (errNum>0n?"+":"") + ratSci(errNum, ref.q, 3) + " LSB)";
+        $("r-rel").textContent = ref.p===0n ? "—"
+          : ((errNum>0n)===(ref.p>0n)?"+":"−") + ratSci(abs(errNum), abs(ref.p*pow2(fr.n)), 4);
+      }
+    }
+
+    // ----- remainder -----
+    if(op==="div"){
+      // r = A − quotient × B, exact, with na + nb + nr fraction bits
+      const Krem = fa.n + fb.n + fr.n;
+      const Frem = A.raw*pow2(fb.n + fr.n) - raw*B.raw*pow2(fa.n);
+      let fx = minimalFor(Frem, Krem, fr.signed || A.signed || B.signed);
+      let xraw;
+      if(fits(fx)){
+        xraw = Frem;
+        let k = Krem;
+        while(k > fx.n){ xraw /= 2n; k--; }
+      } else {
+        fx = clampFmt(fx);
+        xraw = clampRaw(quantize(Frem, pow2(Krem), fx.n, "near"), fx);
+        note("warn","Remainder","The exact remainder needs "+(minimalFor(Frem,Krem,true).m+minimalFor(Frem,Krem,true).n+1)+" bits. Shown rounded in "+qStr(fx)+".");
+      }
+      $("x-fmt1").textContent = qStr(fx);
+      $("x-fmt2").textContent = qStr(fx);
+      $("x-key-int").textContent = "integer · m = " + fx.m;
+      $("x-key-frac").textContent = "fraction · n = " + fx.n;
+      $("x-key-sign").style.display = fx.signed ? "" : "none";
+      const xr = drawRuler($("x-ruler"), xraw, fx, {mini:false, bits:false, slots:false, weights:"nibble"});
+      $("x-int").textContent = xraw.toString();
+      $("x-hex").textContent = xr.hex;
+      $("x-bin").textContent = groupBits(xr.bits);
+      $("x-c").textContent = cLine(xraw,fx);
+      $("x-val").textContent = exactDec(xraw,fx.n);
+      // identity check: A ?= quotient*B + remainder
+      const lhs = A.raw * pow2(fb.n + fr.n + fx.n);
+      const rhs = raw*B.raw*pow2(fa.n + fx.n) + xraw*pow2(fa.n + fb.n + fr.n);
+      $("x-id").innerHTML = lhs===rhs
+        ? '<span class="dim">A = quotient × B + remainder ✓</span>'
+        : 'off by ' + ratSci(lhs-rhs, pow2(fa.n+fb.n+fr.n+fx.n), 4);
+      $("x-lsb").textContent = lsbText(fx.n);
+      $("x-range").textContent = rangeText(fx);
+    }
+
+    drawNotes();
+  }
+
+  recalc();
+})();
+</script>
+</body>
+</html>

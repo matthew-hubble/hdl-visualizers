@@ -1,0 +1,16 @@
+{
+  "name": "fixed-point",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Fixed-point converters and the SystemVerilog struct visualizer, with their tests",
+  "scripts": {
+    "test": "npm run test:js && npm run test:py",
+    "test:js": "node tests/js/run-all.js",
+    "test:py": "uv run --group dev pytest tests -q",
+    "browser": "playwright install chromium"
+  },
+  "devDependencies": {
+    "jsdom": "^29.1.1",
+    "playwright": "^1.62.0"
+  }
+}

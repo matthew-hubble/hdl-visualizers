@@ -1,0 +1,322 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Q Format Converter — float to fixed point</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="fixed-point.css">
+<style>
+h1 .arrow{color:var(--frac)}
+#fval{font-size:26px;font-weight:500;padding:8px 12px;width:min(360px,100%)}
+#qtext{width:120px;text-transform:uppercase}
+#rawin{width:min(320px,100%)}
+/* this page's hint follows the uppercase legend line it sits on */
+.hint{margin-left:auto;letter-spacing:.16em;text-transform:uppercase}
+
+.presets{display:flex;gap:6px;flex-wrap:wrap;margin-top:14px;padding-top:14px;border-top:1px dashed var(--rule2)}
+.presets button{
+  font-family:var(--mono);font-size:12px;padding:5px 9px;cursor:pointer;
+  border:1px solid var(--rule);background:transparent;color:var(--ink2);border-radius:2px;
+}
+.presets button:hover{border-color:var(--ink);color:var(--ink)}
+.presets .plbl{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink3);align-self:center;margin-right:4px}
+
+.banner{
+  display:none;gap:10px;align-items:baseline;
+  border:1px solid var(--alert);background:var(--alert-bg);color:var(--alert);
+  border-radius:3px;padding:10px 14px;margin-bottom:14px;font-size:13px;
+}
+.banner.show{display:flex}
+.banner b{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;flex:none}
+
+@media (max-width:760px){
+  .grid{grid-template-columns:1fr}
+  .ruler{gap:0 7px}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div>
+      <div class="eyebrow">TI Q format · up to 64 bits</div>
+      <h1>Float <span class="arrow">→</span> fixed point</h1>
+      <p class="lede">Enter a decimal value and a word format. Every conversion runs in exact integer arithmetic, so what you see is the bit pattern your DSP will hold.</p>
+    </div>
+    <div class="stamp"><small>format</small><span id="stampq">Q0.15</span><small id="stampw">16-bit signed</small></div>
+  </header>
+
+  <div class="banner" id="banner" role="status" aria-live="polite"><b id="bannerkind">Overflow</b><span id="bannermsg"></span></div>
+
+  <!-- INPUTS -->
+  <section class="panel">
+    <p class="legendline"><span>Input</span></p>
+    <div class="row">
+      <div class="field" style="flex:1 1 320px">
+        <label for="fval">Decimal value</label>
+        <input type="text" id="fval" value="0.6" spellcheck="false" autocomplete="off" inputmode="decimal">
+      </div>
+      <div class="field">
+        <label for="qtext">Q format</label>
+        <input type="text" id="qtext" value="Q0.15" spellcheck="false" autocomplete="off">
+      </div>
+      <div class="field">
+        <span class="lbl">Sign bit</span>
+        <label class="check"><input type="checkbox" id="signed" checked><span>signed</span></label>
+      </div>
+      <div class="field">
+        <label for="mval">Integer bits m</label>
+        <div class="spin"><button type="button" data-step="m,-1" aria-label="Fewer integer bits">−</button><input type="number" id="mval" value="0" min="0" max="64"><button type="button" data-step="m,1" aria-label="More integer bits">+</button></div>
+      </div>
+      <div class="field">
+        <label for="nval">Fraction bits n</label>
+        <div class="spin"><button type="button" data-step="n,-1" aria-label="Fewer fraction bits">−</button><input type="number" id="nval" value="15" min="0" max="64"><button type="button" data-step="n,1" aria-label="More fraction bits">+</button></div>
+      </div>
+    </div>
+    <div class="row" style="margin-top:14px">
+      <div class="field">
+        <span class="lbl">Rounding</span>
+        <div class="seg" id="seground">
+          <button type="button" data-v="near" aria-pressed="true">nearest</button>
+          <button type="button" data-v="trunc" aria-pressed="false">toward zero</button>
+          <button type="button" data-v="floor" aria-pressed="false">floor</button>
+        </div>
+      </div>
+      <div class="field">
+        <span class="lbl">On overflow</span>
+        <div class="seg" id="segovf">
+          <button type="button" data-v="sat" aria-pressed="true">saturate</button>
+          <button type="button" data-v="wrap" aria-pressed="false">wrap</button>
+        </div>
+      </div>
+    </div>
+    <div class="presets" id="presets">
+      <span class="plbl">Common</span>
+    </div>
+  </section>
+
+  <!-- BIT RULER -->
+  <section class="panel" id="rulerpanel">
+    <p class="legendline"><span>The word</span><span class="hint">click a bit to flip it · click a gap to move the binary point</span></p>
+    <div class="ruler" id="ruler"></div>
+    <div class="fields">
+      <span class="fkey" id="key-sign"><i class="sw" style="background:var(--sign)"></i> sign · 1 bit</span>
+      <span class="fkey"><i class="sw" style="background:var(--int)"></i> <span id="key-int">integer · m = 0</span></span>
+      <span class="fkey"><i class="sw" style="background:var(--frac)"></i> <span id="key-frac">fraction · n = 15</span></span>
+    </div>
+  </section>
+
+  <!-- RESULTS -->
+  <div class="grid" id="results">
+    <section class="panel">
+      <p class="legendline"><span>Stored word</span></p>
+      <dl>
+        <dt>Integer</dt>
+        <dd><input type="text" id="rawin" spellcheck="false" autocomplete="off" aria-label="Stored integer, editable"></dd>
+        <dt>Hex</dt>
+        <dd><span class="big" id="o-hex">—</span><button class="copy" data-copy="o-hex">copy</button></dd>
+        <dt>Binary</dt>
+        <dd><span id="o-bin">—</span><button class="copy" data-copy="o-bin">copy</button></dd>
+        <dt>C</dt>
+        <dd><span id="o-c">—</span><button class="copy" data-copy="o-c">copy</button></dd>
+      </dl>
+    </section>
+
+    <section class="panel">
+      <p class="legendline"><span>What it represents</span></p>
+      <dl>
+        <dt>Value</dt>
+        <dd><span class="big" id="o-val">—</span></dd>
+        <dt>Error</dt>
+        <dd><span id="o-err">—</span></dd>
+        <dt>Relative</dt>
+        <dd><span id="o-rel">—</span></dd>
+        <dt>1 LSB</dt>
+        <dd><span id="o-lsb">—</span></dd>
+        <dt>Range</dt>
+        <dd><span id="o-range">—</span></dd>
+      </dl>
+    </section>
+  </div>
+
+  <footer>
+    <b>TI convention.</b> Q<i>m</i>.<i>n</i> counts <i>m</i> integer bits and <i>n</i> fraction bits, with the sign bit on top: a signed word is m+n+1 bits wide, an unsigned word is m+n. Q15 means Q0.15 — a 16-bit signed word holding −1 up to just under +1.<br>
+    <b>Written forms accepted.</b> Q15, Q7.8, q1.30, 8.24. Values may be plain or exponential: −0.375, 2.5e-3, 1e6.
+  </footer>
+</div>
+
+<script src="fixed-point.js"></script>
+<script>
+"use strict";
+(function(){
+  const $ = id => document.getElementById(id);
+  const {pow2, abs, parseDecimal, quantize, exactDec, ratSci, fmtVal,
+         wOf, fits, loOf, hiOf, qStr, clampRaw, wrapRaw, parseQ, clampInt, parseWord,
+         cLine, groupBits, lsbText, rangeText, drawRuler, flipBit, press} = FP;
+
+  const fval=$("fval"), qtext=$("qtext"), signedEl=$("signed"), mEl=$("mval"), nEl=$("nval"),
+        ruler=$("ruler"), rawin=$("rawin"), banner=$("banner"), bannerKind=$("bannerkind"), bannerMsg=$("bannermsg");
+
+  let m=0, n=15, signed=true, rounding="near", ovf="sat";
+  let raw=0n;              // stored integer, signed value
+  let inputRat=null;       // {p,q} rational of what the user typed
+  let overflowed=false;
+  const fmt = () => ({m,n,signed});
+
+  /* ---------- pipeline ---------- */
+  function fromFloat(){
+    const r = parseDecimal(fval.value);
+    inputRat = r;
+    fval.classList.toggle("bad", !r);
+    const f = fmt();
+    if(!r || !fits(f)){ overflowed=false; render(); return; }
+    const q = quantize(r.p, r.q, n, rounding);
+    overflowed = (q > hiOf(f) || q < loOf(f));
+    raw = overflowed ? (ovf==="sat" ? clampRaw(q,f) : wrapRaw(q,f)) : q;
+    render();
+  }
+
+  function fromRaw(v){
+    raw = v; overflowed = false;
+    const txt = exactDec(raw,n);
+    fval.value = txt; fval.classList.remove("bad");
+    inputRat = parseDecimal(txt);
+    render();
+  }
+
+  function setFormat(nm,nn,nsigned){
+    m = Math.max(0, Math.min(64, nm|0));
+    n = Math.max(0, Math.min(64, nn|0));
+    if(nsigned !== undefined) signed = !!nsigned;
+    mEl.value = m; nEl.value = n; signedEl.checked = signed;
+    qtext.value = qStr(fmt());
+    qtext.classList.remove("bad");
+    fromFloat();
+  }
+
+  /* ---------- render ---------- */
+  function render(){
+    const f = fmt(), w = wOf(f);
+    $("stampq").textContent = qStr(f);
+    $("stampw").textContent = w + "-bit " + (signed?"signed":"unsigned");
+    $("key-int").textContent = "integer · m = " + m;
+    $("key-frac").textContent = "fraction · n = " + n;
+    $("key-sign").style.display = signed ? "" : "none";
+
+    const ok = fits(f);
+    $("rulerpanel").classList.toggle("faded", !ok);
+    $("results").classList.toggle("faded", !ok);
+
+    if(!ok){
+      showBanner("Format", "Word length is "+w+" bits. A "+qStr(f)+" "+(signed?"signed":"unsigned")+" word must be between 1 and 64 bits — adjust m or n.");
+      ruler.innerHTML=""; ruler._prev="";
+      return;
+    }
+    if(!inputRat){
+      showBanner("Value", "Enter a decimal number, like −0.375 or 2.5e-3.");
+    } else if(overflowed){
+      showBanner("Overflow", qStr(f)+" tops out at "+fmtVal(hiOf(f),n,20)+" and bottoms out at "+fmtVal(loOf(f),n,20)+". The value was "+(ovf==="sat"?"saturated to the limit.":"wrapped around the word."));
+    } else {
+      banner.classList.remove("show");
+    }
+
+    const word = drawRuler(ruler, raw, f, {
+      bits:true, slots:true,
+      onBit:(i,bw) => fromRaw(flipBit(raw,i,bw,signed)),
+      onPoint:(mm,nn) => setFormat(mm,nn)
+    });
+
+    if(document.activeElement !== rawin) rawin.value = raw.toString();
+    rawin.classList.remove("bad");
+    $("o-hex").textContent = word.hex;
+    $("o-bin").textContent = groupBits(word.bits);
+    $("o-c").textContent = cLine(raw,f);
+    $("o-val").textContent = exactDec(raw,n);
+    $("o-lsb").textContent = lsbText(n);
+    $("o-range").textContent = rangeText(f);
+
+    // quantisation error = raw/2^n − p/q
+    if(inputRat){
+      const {p,q} = inputRat;
+      const num = raw*q - p*pow2(n);        // over q*2^n
+      if(num===0n){
+        $("o-err").innerHTML = '<span class="dim">exact — 0 LSB</span>';
+        $("o-rel").innerHTML = '<span class="dim">0</span>';
+      } else {
+        const errStr = ratSci(num, q*pow2(n), 6);
+        const ulpStr = ratSci(num, q, 3);
+        $("o-err").textContent = (num>0n?"+":"") + errStr + "   (" + (num>0n?"+":"") + ulpStr + " LSB)";
+        $("o-rel").textContent = p===0n ? "—" : (num>0n===p>0n?"+":"−") + ratSci(abs(num), abs(p*pow2(n)), 4);
+      }
+    } else {
+      $("o-err").textContent = "—"; $("o-rel").textContent = "—";
+    }
+  }
+
+  function showBanner(kind,msg){
+    bannerKind.textContent = kind; bannerMsg.textContent = msg;
+    banner.classList.add("show");
+  }
+
+  /* ---------- events ---------- */
+  fval.addEventListener("input", fromFloat);
+
+  qtext.addEventListener("input", () => {
+    const p = parseQ(qtext.value);
+    if(!p){ qtext.classList.add("bad"); return; }
+    qtext.classList.remove("bad");
+    m = p.m; n = p.n; mEl.value = m; nEl.value = n;
+    fromFloat();
+  });
+
+  mEl.addEventListener("input", () => { m = clampInt(mEl.value); qtext.value = qStr(fmt()); fromFloat(); });
+  nEl.addEventListener("input", () => { n = clampInt(nEl.value); qtext.value = qStr(fmt()); fromFloat(); });
+
+  signedEl.addEventListener("change", () => { signed = signedEl.checked; fromFloat(); });
+
+  document.querySelectorAll("[data-step]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const [which,d] = btn.dataset.step.split(",");
+      if(which==="m") setFormat(m+ +d, n); else setFormat(m, n+ +d);
+    });
+  });
+
+  $("seground").addEventListener("click", e => {
+    const b = e.target.closest("button"); if(!b) return;
+    rounding = b.dataset.v; press($("seground"), b); fromFloat();
+  });
+  $("segovf").addEventListener("click", e => {
+    const b = e.target.closest("button"); if(!b) return;
+    ovf = b.dataset.v; press($("segovf"), b); fromFloat();
+  });
+
+  rawin.addEventListener("input", () => {
+    const v = parseWord(rawin.value, fmt());
+    if(v===null){ rawin.classList.add("bad"); return; }
+    rawin.classList.remove("bad");
+    const keep = rawin.value;
+    fromRaw(v);
+    rawin.value = keep;
+  });
+
+  FP.initCopyButtons();
+
+  const PRESETS = [["Q7",0,7],["Q15",0,15],["Q31",0,31],["Q1.14",1,14],["Q2.13",2,13],
+                   ["Q8.24",8,24],["Q16.16",16,16],["Q1.30",1,30],["Q31.32",31,32],["Q0.63",0,63]];
+  const pbox = $("presets");
+  PRESETS.forEach(([label,pm,pn]) => {
+    const b = document.createElement("button");
+    b.type="button"; b.textContent=label;
+    b.addEventListener("click", () => setFormat(pm,pn));
+    pbox.appendChild(b);
+  });
+
+  fromFloat();
+})();
+</script>
+</body>
+</html>
