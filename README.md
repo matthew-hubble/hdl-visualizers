@@ -15,6 +15,30 @@ Three single-page tools that run straight from disk, no server and no build step
 `fixed-point.css` is shared by all four. `fixed-point.js` carries the fixed-point arithmetic and
 `sv-struct.js` the struct reading, bit layout and code generation.
 
+## Drawing a bit layout from the command line
+
+`struct-vis` writes the diagram the struct visualizer draws, as a PNG. It opens the page headless
+and takes the picture the **copy image** button would have given you, so the command and the page
+cannot drift apart.
+
+```sh
+uv sync                    # the command needs playwright
+npm run browser            # and a browser for it to drive
+
+struct-vis desc.sv -o desc.png
+struct-vis -e 'typedef struct packed { logic [3:0] a; logic [11:0] b; } t;'
+cat regs.rdl | struct-vis --rows 64
+struct-vis desc.sv --list-types
+```
+
+SystemVerilog and SystemRDL are told apart by what the declaration says, and `--syntax` settles it
+when the guess is wrong. The switches are the page's: `--type`, `--rows`, `--align`, `--justify`,
+`--no-flatten`, `--hide-underscore`, and `--width` for how wide to draw. Without `--out` the file
+is named after the type. A declaration that will not lay out is reported and nothing is written.
+
+`struct_vis.image` is the same thing as a library, with `render`, `list_types` and
+`detect_syntax`.
+
 ## Running the tests
 
 Two environments, because the pages are JavaScript and the repository is a Python project.

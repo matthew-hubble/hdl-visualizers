@@ -1,18 +1,19 @@
 [project]
-name = "fixed-point"
+name = "struct-vis"
 version = "0.1.0"
-description = "Add your description here"
+description = "Draw a SystemVerilog or SystemRDL declaration as a bit layout picture"
 readme = "README.md"
 authors = [
     { name = "Matt Lowell", email = "matthew@hubble.com" }
 ]
 requires-python = ">=3.13"
-dependencies = []
+dependencies = [
+    "playwright>=1.40",
+]
 
 [dependency-groups]
 dev = [
     "pytest>=8.0",
-    "playwright>=1.40",
     "systemrdl-compiler>=1.27",
     "ruff>=0.6",
     "mypy>=1.11",
@@ -30,7 +31,7 @@ strict = true
 exclude = "^tests/js/out/"
 
 [project.scripts]
-fixed-point = "fixed_point:main"
+struct-vis = "struct_vis:main"
 
 [build-system]
 requires = ["uv_build>=0.12.6,<0.13.0"]

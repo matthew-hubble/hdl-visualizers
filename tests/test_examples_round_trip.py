@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import TypedDict, cast
 
 import pytest
-from playwright.sync_api import Browser, Page, sync_playwright
+from playwright.sync_api import Browser, ConsoleMessage, Page
 from systemrdl.compiler import RDLCompiler
 from systemrdl.messages import MessagePrinter, RDLCompileError
 
@@ -117,21 +117,28 @@ def read_example_labels() -> list[str]:
 EXAMPLE_LABELS = read_example_labels()
 
 
+def _is_script_error(message: ConsoleMessage) -> bool:
+    """Whether a console error came from the page's own script rather than from the network.
+
+    The pages ask a font service for their typefaces, and a request that does not arrive is
+    logged as an error too. No test here turns on whether a web font was reachable, so only the
+    page's own complaints count.
+
+    Args:
+        message: A console message from the page.
+
+    Returns:
+        True when the page reported something wrong with itself.
+    """
+    return message.type == "error" and not message.text.startswith("Failed to load resource")
+
+
 class QuietPrinter(MessagePrinter):
     """A systemrdl-compiler printer that keeps its findings off the console."""
 
     def emit_message(self, lines: list[str]) -> None:
         """Swallow a compiler message; the exception carries what the test needs."""
         return
-
-
-@pytest.fixture(scope="session")
-def browser() -> Iterator[Browser]:
-    """A headless browser shared by every test in the session."""
-    with sync_playwright() as play:
-        instance = play.chromium.launch()
-        yield instance
-        instance.close()
 
 
 @pytest.fixture
@@ -142,7 +149,7 @@ def page(browser: Browser) -> Iterator[Page]:
     sheet.on("pageerror", lambda exc: errors.append(str(exc)))
     sheet.on(
         "console",
-        lambda msg: errors.append(f"console: {msg.text}") if msg.type == "error" else None,
+        lambda msg: errors.append(f"console: {msg.text}") if _is_script_error(msg) else None,
     )
     sheet.goto(PAGE_PATH.as_uri())
     sheet.wait_for_timeout(500)

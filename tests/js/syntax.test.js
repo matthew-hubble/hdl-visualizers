@@ -12,7 +12,12 @@ const ok = report.ok;
   const b = await chromium.launch();
   const p = await b.newPage({viewport:{width:1400,height:1500}, deviceScaleFactor:2});
   const errs=[]; p.on("pageerror",e=>errs.push(e.message));
-  p.on("console", m => { if(m.type()==="error") errs.push("console: "+m.text()); });
+  /* a web font that did not arrive is logged as an error too, and no check here turns
+     on whether the font service was reachable */
+  p.on("console", m => {
+    if(m.type()==="error" && !/^Failed to load resource/.test(m.text()))
+      errs.push("console: " + m.text());
+  });
   await p.goto(PAGE_URL);
   await p.waitForTimeout(1200);
 
