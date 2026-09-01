@@ -31,14 +31,23 @@ var FP = (function(){
     return {p,q};
   }
 
-  // round (p/q) * 2^nbits to an integer under the chosen mode
+  /* Round (p/q) * 2^nbits to an integer under the chosen mode:
+       trunc  toward zero            floor  toward negative infinity
+       near   ties away from zero    even/odd  ties to the neighbour of that parity
+     The three nearest modes differ only on an exact tie, where the two candidates
+     are consecutive integers and so are one of each parity. */
   function quantize(p,q,nbits,mode){
     if(q < 0n){ p = -p; q = -q; }
     const num = p * pow2(nbits), den = q;
     if(mode==="trunc") return num/den;
     if(mode==="floor") return floorDiv(num,den);
     const neg = num<0n, a = abs(num);
-    const r = (2n*a + den) / (2n*den);
+    const down = a/den, rest = 2n*(a%den);
+    let up = rest > den;
+    if(rest === den) up = mode==="even" ? (down & 1n) === 1n
+                        : mode==="odd"  ? (down & 1n) === 0n
+                        : true;
+    const r = up ? down+1n : down;
     return neg ? -r : r;
   }
 

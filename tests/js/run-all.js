@@ -20,6 +20,7 @@ const HERE = __dirname;
 const ONLY = process.argv.slice(2);
 
 const SUITES = [
+  ["rounding",  "the rounding modes, and the strips that pick them"],
   ["layout",    "the bits an unpacked struct puts its members in"],
   ["generate",  "C and Python, compiled and run"],
   ["nested",    "nested types in all three languages"],

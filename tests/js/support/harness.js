@@ -16,20 +16,28 @@ const ROOT = path.resolve(__dirname, "..", "..", "..");
 const OUT = path.join(ROOT, "tests", "js", "out");
 const PAGE = path.join(ROOT, "struct-visualizer.html");
 const ENGINE = path.join(ROOT, "sv-struct.js");
+const ARITH = path.join(ROOT, "fixed-point-arithmetic.html");
+const CONVERTER = path.join(ROOT, "q-format-converter.html");
+const FP_ENGINE = path.join(ROOT, "fixed-point.js");
 const RDL_MODEL = path.join(ROOT, "tests", "rdl_model.py");
 const PAGE_URL = "file://" + PAGE;
+const ARITH_URL = "file://" + ARITH;
+const CONVERTER_URL = "file://" + CONVERTER;
 
 fs.mkdirSync(OUT, {recursive:true});
 
-/* ---------- the layout engine, on its own ---------- */
+/* ---------- the engines, on their own ---------- */
 
-// sv-struct.js is a plain script, so a bare context is all it needs
-function loadEngine(){
+// both are plain scripts, so a bare context is all they need
+function loadScript(file,global){
   const ctx = {console};
   vm.createContext(ctx);
-  vm.runInContext(fs.readFileSync(ENGINE, "utf8"), ctx);
-  return ctx.SV;
+  vm.runInContext(fs.readFileSync(file, "utf8"), ctx);
+  return ctx[global];
 }
+
+const loadEngine = () => loadScript(ENGINE, "SV");
+const loadFixedPoint = () => loadScript(FP_ENGINE, "FP");
 
 /* The page with its script inlined and its font links dropped, so jsdom can run
    it without fetching anything. */
@@ -99,6 +107,7 @@ function reporter(title){
   };
 }
 
-module.exports = {ROOT, OUT, PAGE, PAGE_URL, ENGINE, RDL_MODEL,
-                  loadEngine, inlinePage, python, run, installed, elaborateRdl,
-                  missing, reporter};
+module.exports = {ROOT, OUT, PAGE, PAGE_URL, ENGINE, ARITH, ARITH_URL,
+                  CONVERTER, CONVERTER_URL, RDL_MODEL,
+                  loadEngine, loadFixedPoint, inlinePage, python, run, installed,
+                  elaborateRdl, missing, reporter};

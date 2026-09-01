@@ -82,6 +82,8 @@ h1 .arrow{color:var(--frac)}
         <span class="lbl">Rounding</span>
         <div class="seg" id="seground">
           <button type="button" data-v="near" aria-pressed="true">nearest</button>
+          <button type="button" data-v="even" aria-pressed="false">ties even</button>
+          <button type="button" data-v="odd" aria-pressed="false">ties odd</button>
           <button type="button" data-v="trunc" aria-pressed="false">toward zero</button>
           <button type="button" data-v="floor" aria-pressed="false">floor</button>
         </div>
@@ -145,7 +147,8 @@ h1 .arrow{color:var(--frac)}
 
   <footer>
     <b>TI convention.</b> Q<i>m</i>.<i>n</i> counts <i>m</i> integer bits and <i>n</i> fraction bits, with the sign bit on top: a signed word is m+n+1 bits wide, an unsigned word is m+n. Q15 means Q0.15 — a 16-bit signed word holding −1 up to just under +1.<br>
-    <b>Written forms accepted.</b> Q15, Q7.8, q1.30, 8.24. Values may be plain or exponential: −0.375, 2.5e-3, 1e6.
+    <b>Written forms accepted.</b> Q15, Q7.8, q1.30, 8.24. Values may be plain or exponential: −0.375, 2.5e-3, 1e6.<br>
+    <b>Rounding.</b> The three nearest modes part company only on an exact tie, where the value sits halfway between two words. Nearest sends a tie away from zero; ties even and ties odd send it to whichever neighbour carries that parity, so a long run of ties does not drift one way. Toward zero and floor ignore the remainder altogether.
   </footer>
 </div>
 

@@ -94,6 +94,8 @@ footer td:first-child{color:var(--ink2)}
         <div class="field"><span class="lbl">Rounding</span>
           <div class="seg" id="a-round">
             <button type="button" data-v="near" aria-pressed="true">nearest</button>
+            <button type="button" data-v="even" aria-pressed="false">ties even</button>
+            <button type="button" data-v="odd" aria-pressed="false">ties odd</button>
             <button type="button" data-v="trunc" aria-pressed="false">toward zero</button>
             <button type="button" data-v="floor" aria-pressed="false">floor</button>
           </div>
@@ -128,6 +130,8 @@ footer td:first-child{color:var(--ink2)}
         <div class="field"><span class="lbl">Rounding</span>
           <div class="seg" id="b-round">
             <button type="button" data-v="near" aria-pressed="true">nearest</button>
+            <button type="button" data-v="even" aria-pressed="false">ties even</button>
+            <button type="button" data-v="odd" aria-pressed="false">ties odd</button>
             <button type="button" data-v="trunc" aria-pressed="false">toward zero</button>
             <button type="button" data-v="floor" aria-pressed="false">floor</button>
           </div>
@@ -152,6 +156,8 @@ footer td:first-child{color:var(--ink2)}
       <div class="field manual"><span class="lbl">Rounding</span>
         <div class="seg" id="r-round">
           <button type="button" data-v="near" aria-pressed="true">nearest</button>
+          <button type="button" data-v="even" aria-pressed="false">ties even</button>
+          <button type="button" data-v="odd" aria-pressed="false">ties odd</button>
           <button type="button" data-v="trunc" aria-pressed="false">toward zero</button>
           <button type="button" data-v="floor" aria-pressed="false">floor</button>
         </div>
@@ -241,6 +247,7 @@ footer td:first-child{color:var(--ink2)}
       <tr><td>A ÷ B</td><td>n = nA + mB</td><td>m = mA + nB</td></tr>
     </table>
     Division is the exception: a quotient is rarely exact in any finite word, so the leftover is reported as a remainder in its own smallest exact format. Subtraction always produces a signed result; otherwise the result is signed if either operand is.<br>
+    <b>Rounding.</b> The three nearest modes part company only on an exact tie, where the value sits halfway between two words. Nearest sends a tie away from zero; ties even and ties odd send it to whichever neighbour carries that parity, so a long run of ties does not drift one way. Toward zero and floor ignore the remainder altogether.<br>
     <b>TI convention.</b> Q<i>m</i>.<i>n</i> is m integer bits and n fraction bits, plus a sign bit when signed — m+n+1 bits wide, or m+n unsigned. Words are capped at 64 bits; if a growth format would exceed that, the page falls back and says so.
   </footer>
 </div>
