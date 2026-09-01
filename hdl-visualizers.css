@@ -1,4 +1,4 @@
-/* Shared look and feel for the fixed-point pages.
+/* Shared look and feel for the visualizer pages.
    Each page links this first, then overrides the few values it sizes differently. */
 
 :root{

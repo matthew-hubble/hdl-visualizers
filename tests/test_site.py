@@ -58,7 +58,7 @@ def local_references(page: str) -> list[str]:
         page: The file name of a page at the repository root.
 
     Returns:
-        The reference targets in the order they appear, such as ``["fixed-point.css"]``.
+        The reference targets in the order they appear, such as ``["hdl-visualizers.css"]``.
     """
     reader = ReferenceReader()
     reader.feed((ROOT / page).read_text(encoding="utf-8"))

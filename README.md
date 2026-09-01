@@ -12,7 +12,7 @@ Three single-page tools that run straight from disk, no server and no build step
 | `fixed-point-arithmetic.html` | Two Q format operands through one operation, exactly           |
 | `struct-visualizer.html`      | A SystemVerilog or SystemRDL declaration drawn as a bit vector |
 
-`fixed-point.css` is shared by all four. `fixed-point.js` carries the fixed-point arithmetic and
+`hdl-visualizers.css` is shared by all four. `fixed-point.js` carries the fixed-point arithmetic and
 `sv-struct.js` the struct reading, bit layout and code generation.
 
 ## Drawing a bit layout from the command line
@@ -97,9 +97,9 @@ Dependencies are grouped into one pull request per ecosystem per month by
 ## Publishing
 
 A push to `main` that clears both jobs is published to GitHub Pages by the third job. There is no
-build: it copies every `.html` at the root together with `fixed-point.css`, `fixed-point.js` and
-`sv-struct.js`, and leaves the tests and tooling behind. Nothing is published from a pull request,
-and nothing is published from a commit that failed.
+build: it copies every `.html` at the root together with `hdl-visualizers.css`, `fixed-point.js`
+and `sv-struct.js`, and leaves the tests and tooling behind. Nothing is published from a pull
+request, and nothing is published from a commit that failed.
 
 Pages has to be turned on once by hand, under **Settings → Pages → Build and deployment**, with
 **Source** set to **GitHub Actions**. The workflow's own token is not allowed to do it.
