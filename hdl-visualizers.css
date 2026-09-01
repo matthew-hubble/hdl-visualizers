@@ -71,12 +71,16 @@ input[type=text]:focus-visible,button:focus-visible,select:focus-visible,input[t
 .check span{font-family:var(--mono);font-size:13px;letter-spacing:.04em}
 .check.auto input{accent-color:var(--frac)}
 
-.seg{display:flex;border:1px solid var(--rule);border-radius:3px;overflow:hidden}
+/* max-content holds the strip to the width of its buttons. Left to stretch, a strip whose label is
+   wider than its buttons ends in a band of unfilled space inside the rounded corner. The divider is
+   an inset shadow, not a border, so every button keeps the same geometry and equal labels come out
+   the same width. */
+.seg{display:flex;width:max-content;border:1px solid var(--rule);border-radius:3px;overflow:hidden}
 .seg button{
   border:0;background:#F7F9FB;color:var(--ink2);cursor:pointer;
   font-family:var(--mono);font-size:12px;padding:9px 11px;letter-spacing:.02em;
 }
-.seg button + button{border-left:1px solid var(--rule)}
+.seg button + button{box-shadow:inset 1px 0 0 var(--rule)}
 .seg button[aria-pressed=true]{background:var(--ink);color:#fff}
 .seg button:hover:not([aria-pressed=true]):not(:disabled){background:var(--rule2);color:var(--ink)}
 
