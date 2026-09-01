@@ -29,11 +29,21 @@ const ok = report.ok;
   });
 
   async function grab(name){
+    // leave a marker, so the picture the last grab left cannot be read as this one
+    await p.evaluate(() => navigator.clipboard.writeText("no picture yet"));
     await p.click("#copyimg");
-    await p.waitForTimeout(400);
     const shot = await p.evaluate(async () => {
-      const items = await navigator.clipboard.read();
-      const types = [].concat.apply([], items.map(i => i.types));
+      /* copyImage paints, encodes and writes without saying when it is done, and how long
+         that takes goes with the size of the diagram and the load on the machine. Wait for
+         the picture to arrive rather than guessing at it. */
+      const deadline = Date.now() + 10000;
+      let items, types;
+      for(;;){
+        items = await navigator.clipboard.read();
+        types = [].concat.apply([], items.map(i => i.types));
+        if(types.indexOf("image/png") >= 0 || Date.now() > deadline) break;
+        await new Promise(r => setTimeout(r,50));
+      }
       if(types.indexOf("image/png") < 0) return {types};
       const blob = await items[0].getType("image/png");
       const url = URL.createObjectURL(blob);
@@ -128,6 +138,9 @@ const ok = report.ok;
   ok(await p.evaluate(() =>
        getComputedStyle(document.getElementById("copyimg")).pointerEvents === "none"),
      "so the button cannot be pressed");
+  /* flash() holds the label it is showing until it puts the old one back a second later, and
+     ignores anything asked of it meanwhile, so let the last "copied" settle before looking. */
+  await p.waitForFunction(() => document.getElementById("copyimg").textContent === "copy image");
   // the guard still holds if it is reached some other way
   const said = await p.evaluate(async () => {
     document.getElementById("copyimg").dispatchEvent(new MouseEvent("click",{bubbles:true}));

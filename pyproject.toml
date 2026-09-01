@@ -24,6 +24,10 @@ line-length = 100
 [tool.mypy]
 python_version = "3.13"
 strict = true
+# The suites write generated dataclasses here. Ruff skips them because they are not tracked;
+# mypy has no such rule, and without this it checks a different set of files once the tests
+# have been run than it does on a fresh checkout.
+exclude = "^tests/js/out/"
 
 [project.scripts]
 fixed-point = "fixed_point:main"

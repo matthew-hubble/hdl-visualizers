@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Fixed point — Q format and struct layout tools</title>
+<meta name="description" content="Three single-page tools: a TI Q format converter, exact fixed-point arithmetic, and a SystemVerilog struct layout visualizer.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="fixed-point.css">
+<style>
+.tools{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:14px;margin-bottom:14px}
+.tool{display:flex;flex-direction:column;margin-bottom:0;text-decoration:none;color:inherit}
+.tool:hover,.tool:focus-visible{border-color:var(--ink);outline:none}
+.tool h2{font-size:19px;line-height:1.15;letter-spacing:-.015em;font-weight:600;margin:0 0 7px}
+.tool h2 .kw{color:var(--sign)}
+.tool p{margin:0;color:var(--ink2);font-size:13px}
+.tool .go{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink3);margin-top:auto;padding-top:16px}
+.tool:hover .go,.tool:focus-visible .go{color:var(--ink)}
+.tool .go::after{content:" \2192";color:var(--frac)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div>
+      <div class="eyebrow">Fixed point · TI Q format · SystemVerilog</div>
+      <h1>Bits, and where the point sits</h1>
+      <p class="lede">Three single-page tools for the arithmetic a DSP actually does and the vectors an RTL struct actually packs into. Every value is worked out in exact integer arithmetic, in the browser.</p>
+    </div>
+    <div class="stamp"><small>pages</small><span>3</span><small>no build step</small></div>
+  </header>
+
+  <section class="panel">
+    <p class="legendline"><span>Q0.7 · one signed byte</span><span class="hint">−1 up to 127/128</span></p>
+    <!-- What the converter draws for 0xB3, written out; the mark after the sign is the point. -->
+    <div class="ruler" aria-hidden="true">
+      <div class="grp">
+        <div class="grow">
+          <span class="slot"></span>
+          <span class="cell sign"><span class="b">1</span><span class="w">−2<sup>0</sup></span></span>
+          <span class="slot on"></span>
+          <span class="cell frac zero"><span class="b">0</span><span class="w">2<sup>−1</sup></span></span>
+          <span class="slot"></span>
+          <span class="cell frac"><span class="b">1</span><span class="w"></span></span>
+          <span class="slot"></span>
+          <span class="cell frac"><span class="b">1</span><span class="w">2<sup>−3</sup></span></span>
+          <span class="slot"></span>
+        </div>
+        <div class="hexd">B</div>
+      </div>
+      <div class="grp">
+        <div class="grow">
+          <span class="cell frac zero"><span class="b">0</span><span class="w"></span></span>
+          <span class="slot"></span>
+          <span class="cell frac zero"><span class="b">0</span><span class="w"></span></span>
+          <span class="slot"></span>
+          <span class="cell frac"><span class="b">1</span><span class="w"></span></span>
+          <span class="slot"></span>
+          <span class="cell frac"><span class="b">1</span><span class="w">2<sup>−7</sup></span></span>
+          <span class="slot"></span>
+        </div>
+        <div class="hexd">3</div>
+      </div>
+    </div>
+    <div class="fields">
+      <span class="fkey"><span class="sw" style="background:var(--sign)"></span>sign</span>
+      <span class="fkey"><span class="sw" style="background:var(--frac)"></span>fraction</span>
+      <span class="fkey">0xB3 = −0.6015625</span>
+    </div>
+  </section>
+
+  <div class="tools">
+
+    <a class="panel tool" href="q-format-converter.html">
+      <p class="legendline"><span>Converter</span></p>
+      <h2>Float <span style="color:var(--frac)">&#8594;</span> fixed point</h2>
+      <p>A decimal value and a word format in, the exact bit pattern out — with the rounding error, the representable neighbours and the raw hex it lands on.</p>
+      <span class="go">q-format-converter.html</span>
+    </a>
+
+    <a class="panel tool" href="fixed-point-arithmetic.html">
+      <p class="legendline"><span>Arithmetic</span></p>
+      <h2>Two operands, one operation</h2>
+      <p>Add, subtract, multiply or divide two Q format words. Auto precision grows the result so nothing is lost; pin the format yourself to see what a narrower word costs.</p>
+      <span class="go">fixed-point-arithmetic.html</span>
+    </a>
+
+    <a class="panel tool" href="struct-visualizer.html">
+      <p class="legendline"><span>Visualizer</span></p>
+      <h2><span class="kw">struct packed</span> layout</h2>
+      <p>Paste a SystemVerilog or SystemRDL declaration and read the bit vector it packs into, then take the C, Python, SystemRDL or SystemVerilog it generates.</p>
+      <span class="go">struct-visualizer.html</span>
+    </a>
+
+  </div>
+
+  <footer>
+    <b>No server.</b> Each page is one HTML file plus the shared stylesheet and script, so it works
+    from this site, from a checkout on disk, or from anywhere you copy it to.<br>
+    <b>Exact.</b> Nothing here goes through a float. Values are held as integers and scaled, so a
+    bit pattern shown is the bit pattern your hardware holds.<br>
+    <b>Source.</b> <a href="https://github.com/matthew-hubble/hdl-visualizers">github.com/matthew-hubble/hdl-visualizers</a>
+  </footer>
+</div>
+</body>
+</html>
