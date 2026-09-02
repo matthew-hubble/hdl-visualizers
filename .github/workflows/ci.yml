@@ -104,3 +104,26 @@ jobs:
           path: tests/js/out/
           if-no-files-found: ignore
           retention-days: 7
+
+  # The one check to require of a pull request. Branch protection names checks as strings, so
+  # requiring the two jobs above directly would mean revisiting the setting every time a job is
+  # added, renamed or split; this stays put while they change.
+  gate:
+    name: CI passed
+    needs: [lint, test]
+    # It has to run even when a job it waits on failed, because a skipped check counts as a pass
+    # to branch protection, which would wave a red pull request through.
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Take the results of the jobs it waits on
+        env:
+          RESULTS: ${{ needs.lint.result }} ${{ needs.test.result }}
+        run: |
+          for result in $RESULTS; do
+            if [ "$result" != success ]; then
+              echo "a job this waits on came back $result"
+              exit 1
+            fi
+          done
+          echo "lint and test both passed"

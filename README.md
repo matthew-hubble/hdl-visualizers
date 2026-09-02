@@ -79,20 +79,38 @@ not tracked.
 
 ## Continuous integration
 
-[`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs on every push and pull request, in two
-jobs that go at once:
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs on every push to `main` and on every
+pull request:
 
 | Job                    | What it does                                                     |
 | ---------------------- | ---------------------------------------------------------------- |
 | Format, lint and types | `ruff format --check`, `ruff check`, then `mypy` in strict mode  |
 | Test suites            | Both suites, on a runner with `gcc`, Verilator and Chromium      |
+| CI passed              | Waits on those two and fails unless both succeeded               |
 
-Because the runner has every outside tool installed, nothing is skipped there the way it is on a
-partial machine. If a browser suite fails, what it drew is kept as a `test-output` artifact for a
-week, which is usually enough to see why.
+The first two go at once. Because the runner has every outside tool installed, nothing is skipped
+there the way it is on a partial machine. If a browser suite fails, what it drew is kept as a
+`test-output` artifact for a week, which is usually enough to see why.
+
+`CI passed` is there to be the one check a branch rule asks for. Rules name checks as plain
+strings, so requiring the other two directly would mean editing the rule whenever a job is added,
+renamed or split. It also closes a gap: a job that is skipped rather than run counts as a pass to
+branch protection, which would wave a red pull request through, so this one always runs and reads
+their results itself.
 
 Dependencies are grouped into one pull request per ecosystem per month by
 [`.github/dependabot.yml`](.github/dependabot.yml).
+
+### Requiring it to merge
+
+No workflow can make itself mandatory, so this is a repository setting: **Settings → Rules →
+Rulesets → New branch ruleset**, targeting `main`, with **Require status checks to pass** ticked
+and `CI passed` chosen. Tick **Require a pull request before merging** beside it to stop a commit
+reaching `main` without one.
+
+That needs a plan which allows protected branches on a private repository, and GitHub Free is not
+one: the API answers `403 Upgrade to GitHub Pro or make this repository public`. Making the
+repository public lifts it, and lifts the same limit on Pages described below.
 
 ## Publishing
 
@@ -112,6 +130,11 @@ Build and deployment**, with **Source** set to **GitHub Actions**, because the w
 token is not allowed to do it. And GitHub only fires a `workflow_run` trigger for a copy of the
 workflow already on the default branch, so the first deployment is the merge after the one that
 adds `cd.yml`.
+
+Pages cannot be turned on at all while the repository is private on GitHub Free, which publishes
+only from a public repository. Note that a site published from a private repository is public
+anyway on every plan below Enterprise Cloud, so making this repository public costs no privacy
+that Pages would have kept, and it settles the branch rule above at the same time.
 
 [ci-badge]: https://github.com/matthew-hubble/hdl-visualizers/actions/workflows/ci.yml/badge.svg
 [ci-runs]: https://github.com/matthew-hubble/hdl-visualizers/actions/workflows/ci.yml
