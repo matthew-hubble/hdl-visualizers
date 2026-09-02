@@ -17,7 +17,7 @@ import pytest
 ROOT = Path(__file__).resolve().parent.parent
 LANDING = "index.html"
 PUBLISHED_SUFFIXES = frozenset({".html", ".css", ".js"})
-"""The extensions the deploy job in .github/workflows/ci.yml copies into the site."""
+"""The extensions the deploy job in .github/workflows/cd.yml copies into the site."""
 
 LINKING_ATTRIBUTES = frozenset({"href", "src"})
 ELSEWHERE = re.compile(r"[a-z][a-z0-9+.\-]*:|//|#")

@@ -1,6 +1,6 @@
 # Fixed point
 
-[![CI][ci-badge]][ci-runs]
+[![CI][ci-badge]][ci-runs] [![CD][cd-badge]][cd-runs]
 
 Three single-page tools that run straight from disk, no server and no build step. They are live at
 <https://matthew-hubble.github.io/hdl-visualizers/>, and open just as well from a checkout:
@@ -96,13 +96,24 @@ Dependencies are grouped into one pull request per ecosystem per month by
 
 ## Publishing
 
-A push to `main` that clears both jobs is published to GitHub Pages by the third job. There is no
+[`.github/workflows/cd.yml`](.github/workflows/cd.yml) publishes the site to GitHub Pages. It
+waits on CI rather than on the push, and runs only when CI passed on `main`, so nothing is
+published from a pull request and nothing is published from a commit that failed. There is no
 build: it copies every `.html` at the root together with `hdl-visualizers.css`, `fixed-point.js`
-and `sv-struct.js`, and leaves the tests and tooling behind. Nothing is published from a pull
-request, and nothing is published from a commit that failed.
+and `sv-struct.js`, and leaves the tests and tooling behind.
 
-Pages has to be turned on once by hand, under **Settings → Pages → Build and deployment**, with
-**Source** set to **GitHub Actions**. The workflow's own token is not allowed to do it.
+Waiting on CI has one consequence worth knowing. A run triggered that way is handed the default
+branch, not the commit that was tested, so CD checks out `workflow_run.head_sha` by name; a
+second merge landing while a deploy is in flight cannot slip an untested commit onto the site.
+Re-running a CI run from the Actions tab is the way to publish again without a new commit.
+
+Two things have to be done by hand, once each. Pages needs turning on under **Settings → Pages →
+Build and deployment**, with **Source** set to **GitHub Actions**, because the workflow's own
+token is not allowed to do it. And GitHub only fires a `workflow_run` trigger for a copy of the
+workflow already on the default branch, so the first deployment is the merge after the one that
+adds `cd.yml`.
 
 [ci-badge]: https://github.com/matthew-hubble/hdl-visualizers/actions/workflows/ci.yml/badge.svg
 [ci-runs]: https://github.com/matthew-hubble/hdl-visualizers/actions/workflows/ci.yml
+[cd-badge]: https://github.com/matthew-hubble/hdl-visualizers/actions/workflows/cd.yml/badge.svg
+[cd-runs]: https://github.com/matthew-hubble/hdl-visualizers/actions/workflows/cd.yml
