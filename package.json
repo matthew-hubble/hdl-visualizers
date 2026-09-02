@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "engines": {
-    "node": ">=24"
+    "node": "^24.15.0 || >=26.0.0"
   },
   "description": "Fixed-point converters and the SystemVerilog struct visualizer, with their tests",
   "scripts": {
