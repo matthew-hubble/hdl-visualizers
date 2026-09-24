@@ -211,6 +211,96 @@ var FP = (function(){
     return v;
   }
 
+  /* ---------- binary floating point ----------
+     A float word is a sign, an exponent and a significand, and what it holds is
+     an exact rational with a power of two underneath. Both directions run in
+     integers here, so a value is never rounded twice on its way in.
+
+     `kind` says what the top exponent word means. IEEE 754 keeps it back for the
+     infinities and the NaNs; the OCP 8-bit form E4M3 spends all but one of those
+     words on numbers, leaving only the all-ones significand for NaN; the 4-bit
+     forms keep nothing back and are finite throughout. */
+  const FLOATS = [
+    {key:"binary16", label:"binary16", e:5,  m:10, kind:"ieee",   also:"fp16 float16 half"},
+    {key:"bf16",     label:"bf16",     e:8,  m:7,  kind:"ieee",   also:"bfloat16 bfloat"},
+    {key:"binary32", label:"binary32", e:8,  m:23, kind:"ieee",   also:"fp32 float32 single"},
+    {key:"binary64", label:"binary64", e:11, m:52, kind:"ieee",   also:"fp64 float64 double"},
+    {key:"e4m3",     label:"fp8 E4M3", e:4,  m:3,  kind:"e4m3",   also:"fp8"},
+    {key:"e5m2",     label:"fp8 E5M2", e:5,  m:2,  kind:"ieee",   also:""},
+    {key:"e2m1",     label:"fp4 E2M1", e:2,  m:1,  kind:"finite", also:"fp4"},
+    {key:"e3m0",     label:"fp4 E3M0", e:3,  m:0,  kind:"finite", also:""}
+  ];
+  FLOATS.forEach(f => {
+    f.bits = 1 + f.e + f.m;
+    f.bias = (1 << (f.e - 1)) - 1;
+    f.top = (1 << f.e) - 1;                       // the largest exponent word
+  });
+
+  /* The formats a field of this width could hold, the one to reach for first. */
+  const floatsFor = width => FLOATS.filter(f => f.bits === width);
+
+  /* A format by any of the names it goes by, or by the E<e>M<m> shape spelled
+     out, so "FP8 (E4M3)", "e4m3" and "fp8" all arrive at the same place. */
+  function floatNamed(name){
+    const t = String(name == null ? "" : name).toLowerCase().replace(/[^a-z0-9]/g,"");
+    if(!t) return null;
+    const known = FLOATS.filter(f => f.key === t || f.also.split(" ").indexOf(t) >= 0)[0];
+    if(known) return known;
+    // the shape may be spelled out beside the family, as in "FP8 (E4M3)"
+    const shape = /e(\d+)m(\d+)/.exec(t);
+    return shape ? FLOATS.filter(f => f.e === +shape[1] && f.m === +shape[2])[0] || null : null;
+  }
+
+  // the word for a NaN, and for an infinity, where the format keeps one
+  const floatNaN = f => f.kind === "finite" ? null
+    : (BigInt(f.top) << BigInt(f.m)) | (f.kind === "e4m3" ? pow2(f.m) - 1n : pow2(f.m - 1));
+  const floatInf = (f,neg) => f.kind !== "ieee" ? null
+    : (neg ? pow2(f.bits - 1) : 0n) | (BigInt(f.top) << BigInt(f.m));
+
+  /* What a word holds: {nan}, {inf, neg}, or the value as p / 2^k, where p
+     carries the sign and `neg` catches a negative zero as well. */
+  function unpackFloat(bits,f){
+    const neg = ((bits >> BigInt(f.bits - 1)) & 1n) === 1n;
+    const exp = Number((bits >> BigInt(f.m)) & (pow2(f.e) - 1n));
+    const frac = bits & (pow2(f.m) - 1n);
+    if(exp === f.top && f.kind !== "finite"){
+      if(f.kind === "ieee") return frac ? {nan:true} : {inf:true, neg};
+      if(frac === pow2(f.m) - 1n) return {nan:true};      // E4M3 keeps only this one back
+    }
+    const sig = exp ? frac | pow2(f.m) : frac;            // no leading one when subnormal
+    return {neg, p: neg ? -sig : sig, k: f.m + f.bias - (exp || 1)};
+  }
+
+  /* The word nearest an exact rational, ties to even. One too large for the
+     format becomes an infinity where the format has one, and the largest word it
+     does have where it does not. */
+  function packFloat(rat,f){
+    const sign = rat.p < 0n ? pow2(f.bits - 1) : 0n;
+    const p = rat.p < 0n ? -rat.p : rat.p, q = rat.q;
+    if(p === 0n || q <= 0n) return sign;      // nothing under the line to divide by
+
+    // the exponent: the largest e with 2^e <= p/q, from a guess within a bit of it
+    const reaches = k => k >= 0 ? p >= (q << BigInt(k)) : (p << BigInt(-k)) >= q;
+    let e = p.toString(2).length - q.toString(2).length;
+    while(!reaches(e)) e--;
+    while(reaches(e+1)) e++;
+    const near = k => k >= 0 ? quantize(p, q, k, "even")
+                             : quantize(p, q << BigInt(-k), 0, "even");
+
+    if(e < 1 - f.bias){                                   // subnormal, or under one
+      const sig = near(f.m + f.bias - 1);
+      return sign | (sig >= pow2(f.m) ? pow2(f.m) : sig); // rounding up leaves the subnormals
+    }
+    let sig = near(f.m - e);
+    if(sig >= pow2(f.m + 1)){ sig >>= 1n; e++; }          // the rounding carried
+    const capExp = f.kind === "ieee" ? f.top - 1 : f.top;
+    const capFrac = pow2(f.m) - (f.kind === "e4m3" ? 2n : 1n);
+    const word = sig - pow2(f.m);
+    if(e + f.bias > capExp || (e + f.bias === capExp && word > capFrac))
+      return sign | (floatInf(f,false) || ((BigInt(capExp) << BigInt(f.m)) | capFrac));
+    return sign | (BigInt(e + f.bias) << BigInt(f.m)) | word;
+  }
+
   /* ---------- output text ---------- */
   function cLine(raw,f){
     const bits = wOf(f)<=8?8:wOf(f)<=16?16:wOf(f)<=32?32:64;
@@ -338,6 +428,7 @@ var FP = (function(){
     parseDecimal, quantize, exactDec, ratSci, fmtVal, dblRat, ratExactDec,
     wOf, fits, loOf, hiOf, qStr, clampRaw, wrapRaw, minimalFor, divFitFor, clampFmt,
     parseQ, clampInt, parseWord,
+    FLOATS, floatsFor, floatNamed, floatNaN, floatInf, unpackFloat, packFloat,
     cLine, groupBits, lsbText, rangeText,
     drawRuler, flipBit, press, initCopyButtons
   };

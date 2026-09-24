@@ -2,18 +2,32 @@
 
 [![CI][ci-badge]][ci-runs] [![CD][cd-badge]][cd-runs]
 
-Three single-page tools that run straight from disk, no server and no build step. They are live at
+Four single-page tools that run straight from disk, no server and no build step. They are live at
 <https://matthew-hubble.github.io/hdl-visualizers/>, and open just as well from a checkout:
 
-| Page                          | What it does                                                   |
-| ----------------------------- | -------------------------------------------------------------- |
-| `index.html`                  | Links the three below; the page the live site opens            |
-| `q-format-converter.html`     | A decimal value to and from a TI Q format word                 |
-| `fixed-point-arithmetic.html` | Two Q format operands through one operation, exactly           |
-| `struct-visualizer.html`      | A SystemVerilog or SystemRDL declaration drawn as a bit vector |
+| Page                          | What it does                                                    |
+| ----------------------------- | --------------------------------------------------------------- |
+| `index.html`                  | Links the four below; the page the live site opens              |
+| `q-format-converter.html`     | A decimal value to and from a TI Q format word                  |
+| `fixed-point-arithmetic.html` | Two Q format operands through one operation, exactly            |
+| `struct-visualizer.html`      | A SystemVerilog or SystemRDL declaration drawn as a bit vector  |
+| `rdl-visualizer.html`         | A SystemRDL register map, its field values and their readings   |
 
-`hdl-visualizers.css` is shared by all four. `fixed-point.js` carries the fixed-point arithmetic and
-`sv-struct.js` the struct reading, bit layout and code generation.
+`hdl-visualizers.css` is shared by all five. `fixed-point.js` carries the fixed-point arithmetic
+and the binary float formats, and `sv-struct.js` the struct reading, bit layout and code
+generation; the register page uses both.
+
+A comment after a SystemRDL field says how to read it, and the register page takes it from there:
+
+```systemrdl
+field { desc = "Tap 1";   } tap1 [31:16];  // Q1.14
+field { desc = "Count";   } count [15:8];  // unsigned
+field { desc = "Scale";   } scale  [7:0];  // FP8 (E4M3)
+```
+
+`signed`, `unsigned`, a TI Q format, `float` for whichever IEEE format fits the field, or a named
+one: `binary16`, `bf16`, `binary32`, `binary64`, `FP8 (E4M3)`, `FP8 (E5M2)`, `FP4 (E2M1)`,
+`FP4 (E3M0)`, or any `E`<i>e</i>`M`<i>m</i> shape those come in.
 
 ## Drawing a bit layout from the command line
 
@@ -73,6 +87,16 @@ The generated code is checked by the tools that consume it rather than by readin
 
 `gcc` and `verilator` come from the system; a suite that needs a missing one says so and skips
 rather than failing. `tests/js/run-all.js` warns up front about anything absent.
+
+The register page is checked against the same compiler from the other end: every example it ships
+is elaborated, and the bits the page draws each field in are compared with the bits
+systemrdl-compiler puts it in, so the page's own reading of a register map has to agree with the
+reference one.
+
+The float formats are checked against three things that are not the code under test: the textbook
+formula worked in doubles, the conversions the platform itself does through `DataView`, and the
+words each specification names. Every format of sixteen bits or fewer is walked word by word,
+which is every value it can hold, in both directions.
 
 Test output, including the screenshots the browser suites take, goes to `tests/js/out/`, which is
 not tracked.

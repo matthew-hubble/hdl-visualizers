@@ -15,12 +15,14 @@ const path = require("path");
 const ROOT = path.resolve(__dirname, "..", "..", "..");
 const OUT = path.join(ROOT, "tests", "js", "out");
 const PAGE = path.join(ROOT, "struct-visualizer.html");
+const RDL_PAGE = path.join(ROOT, "rdl-visualizer.html");
 const ENGINE = path.join(ROOT, "sv-struct.js");
 const ARITH = path.join(ROOT, "fixed-point-arithmetic.html");
 const CONVERTER = path.join(ROOT, "q-format-converter.html");
 const FP_ENGINE = path.join(ROOT, "fixed-point.js");
 const RDL_MODEL = path.join(ROOT, "tests", "rdl_model.py");
 const PAGE_URL = "file://" + PAGE;
+const RDL_PAGE_URL = "file://" + RDL_PAGE;
 const ARITH_URL = "file://" + ARITH;
 const CONVERTER_URL = "file://" + CONVERTER;
 
@@ -39,14 +41,19 @@ function loadScript(file,global){
 const loadEngine = () => loadScript(ENGINE, "SV");
 const loadFixedPoint = () => loadScript(FP_ENGINE, "FP");
 
-/* The page with its script inlined and its font links dropped, so jsdom can run
-   it without fetching anything. */
-function inlinePage(){
-  return fs.readFileSync(PAGE, "utf8")
-    .replace('<script src="sv-struct.js"></script>',
-             "<script>" + fs.readFileSync(ENGINE, "utf8") + "</script>")
+/* A page with the scripts it asks for inlined and its font links dropped, so
+   jsdom can run it without fetching anything. */
+const SCRIPTS = {"sv-struct.js": ENGINE, "fixed-point.js": FP_ENGINE};
+
+function inline(page){
+  return fs.readFileSync(page, "utf8")
+    .replace(/<script src="([^"]+)"><\/script>/g, (whole,asked) =>
+      SCRIPTS[asked] ? "<script>" + fs.readFileSync(SCRIPTS[asked], "utf8") + "</script>" : whole)
     .replace(/<link[^>]*>/g, "");
 }
+
+const inlinePage = () => inline(PAGE);
+const inlineRdlPage = () => inline(RDL_PAGE);
 
 /* ---------- the tools that check what the page generates ---------- */
 
@@ -107,7 +114,7 @@ function reporter(title){
   };
 }
 
-module.exports = {ROOT, OUT, PAGE, PAGE_URL, ENGINE, ARITH, ARITH_URL,
-                  CONVERTER, CONVERTER_URL, RDL_MODEL,
-                  loadEngine, loadFixedPoint, inlinePage, python, run, installed,
-                  elaborateRdl, missing, reporter};
+module.exports = {ROOT, OUT, PAGE, PAGE_URL, RDL_PAGE, RDL_PAGE_URL, ENGINE,
+                  ARITH, ARITH_URL, CONVERTER, CONVERTER_URL, RDL_MODEL,
+                  loadEngine, loadFixedPoint, inlinePage, inlineRdlPage,
+                  python, run, installed, elaborateRdl, missing, reporter};

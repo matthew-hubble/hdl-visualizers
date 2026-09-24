@@ -1,0 +1,1109 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>RDL visualizer — SystemRDL register layout and values</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="hdl-visualizers.css">
+<style>
+/* This page draws whole vectors rather than single bits, so it runs wider than
+   the converter, and every field carries a value beside its bits. */
+:root{--wrap:1180px}
+.lede{max-width:62ch}
+.stamp{font-size:19px;letter-spacing:.01em;padding:8px 14px;gap:10px}
+h1 .kw{color:var(--frac)}
+
+/* ---------- source ----------
+   The gutter is absolutely positioned so its line count never drives the height
+   of the box; the textarea alone does that, and stays resizable. */
+.editor{
+  --dg:2;                                     /* digits in the largest line number */
+  position:relative;background:#F7F9FB;border:1px solid var(--rule);border-radius:3px;
+  overflow:hidden;
+}
+.editor:focus-within{outline:2px solid var(--int);outline-offset:1px}
+.gutter{
+  position:absolute;left:0;top:0;bottom:0;width:calc(var(--dg) * 1ch + 17px);overflow:hidden;
+  padding:10px 8px 10px 0;text-align:right;user-select:none;pointer-events:none;
+  font-family:var(--mono);font-size:13px;line-height:1.6;
+  color:var(--ink3);background:#F0F4F7;border-right:1px solid var(--rule2);
+}
+.gutter div{font-variant-numeric:tabular-nums}
+.gutter div.bad{color:var(--warn);background:var(--warn-bg);font-weight:500}
+textarea#src{
+  display:block;font-family:var(--mono);font-size:13px;line-height:1.6;color:var(--ink);
+  background:transparent;border:0;border-radius:0;
+  padding:10px 12px 10px calc(var(--dg) * 1ch + 29px);
+  width:100%;min-height:290px;resize:vertical;tab-size:4;white-space:pre;overflow:auto;
+}
+textarea#src:focus-visible{outline:none}
+select#root{
+  font-family:var(--mono);font-size:14px;color:var(--ink);cursor:pointer;
+  background:#F7F9FB;border:1px solid var(--rule);border-radius:3px;padding:8px 10px;min-width:186px;
+}
+.presets{display:flex;gap:6px;flex-wrap:wrap;margin-top:14px;padding-top:14px;border-top:1px dashed var(--rule2)}
+.presets button{
+  font-family:var(--mono);font-size:12px;padding:5px 9px;cursor:pointer;
+  border:1px solid var(--rule);background:transparent;color:var(--ink2);border-radius:2px;
+}
+.presets button:hover{border-color:var(--ink);color:var(--ink)}
+.presets .plbl{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink3);align-self:center;margin-right:4px}
+
+/* ---------- notes ---------- */
+#notes{display:flex;flex-direction:column;gap:8px;margin-bottom:14px}
+#notes:empty{display:none}
+.note{display:flex;gap:10px;align-items:baseline;border-radius:3px;padding:9px 13px;font-size:13px}
+.note b{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;flex:none}
+.note.alert{border:1px solid var(--alert);background:var(--alert-bg);color:var(--alert)}
+.note.warn{border:1px solid var(--warn);background:var(--warn-bg);color:var(--warn)}
+.legendline .hint{margin-left:auto;letter-spacing:.06em;text-transform:none}
+
+/* ---------- field diagram ----------
+   One .drow per word of the vector. The outer .dtrack is a grid of the full row
+   width so a short top row still lines its bit columns up with the rows below;
+   the .track and .ticks inside it span only the bits that exist. */
+.drow{display:flex;align-items:flex-start;gap:10px}
+.drow + .drow{margin-top:11px}
+.rlab{
+  flex:none;width:58px;text-align:right;padding-top:15px;
+  font-family:var(--mono);font-size:10px;letter-spacing:.04em;color:var(--ink3);
+}
+.rval{
+  flex:none;padding-top:14px;white-space:nowrap;
+  font-family:var(--mono);font-size:11px;letter-spacing:.02em;color:var(--ink2);
+}
+.dtrack{flex:1;min-width:0;display:grid;grid-template-columns:repeat(var(--n),minmax(0,1fr))}
+.track{
+  grid-row:1;display:grid;grid-template-columns:repeat(var(--n),minmax(0,1fr));
+  border:1px solid var(--rule);border-radius:3px;overflow:hidden;background:var(--panel);
+}
+.ticks{grid-row:2;display:grid;grid-template-columns:repeat(var(--n),minmax(0,1fr));height:12px;margin-top:2px}
+.ticks i{border-left:1px solid var(--rule);height:5px}
+.ticks i.q{height:8px}
+.ticks i.b{height:12px;border-left-color:var(--ink3)}
+.ticks i:last-child{border-right:1px solid var(--ink3)}
+
+/* one field of the vector; .seg is left to the shared segmented control */
+.fseg{
+  container-type:inline-size;position:relative;min-width:0;overflow:hidden;
+  border:0;border-left:1px solid var(--rule);border-radius:0;font:inherit;cursor:pointer;
+  background:var(--sbg);color:var(--sfg);padding:6px 0 7px;
+  display:flex;flex-direction:column;justify-content:center;gap:3px;
+}
+.fseg:first-child{border-left:0}
+.fseg .ixs{
+  display:flex;justify-content:space-between;gap:3px;padding:0 4px;
+  font-family:var(--mono);font-size:9px;font-style:normal;line-height:1;color:var(--ink3);
+}
+.fseg.one .ixs{justify-content:center}
+.fseg .nm{
+  font-family:var(--mono);font-size:12px;font-weight:500;line-height:1.3;text-align:center;
+  padding:0 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.fseg .nm:empty{min-height:16px}
+.fseg .vl{
+  font-family:var(--mono);font-size:10px;line-height:1.2;text-align:center;color:var(--ink2);
+  padding:0 3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.fseg:hover{filter:brightness(.975)}
+.fseg.hl{outline:2px solid var(--ink);outline-offset:-2px;z-index:2}
+/* a field cut by the word boundary keeps a dotted edge on the side it continues */
+.fseg.cl::before,.fseg.cr::after{content:"";position:absolute;top:0;bottom:0;opacity:.65}
+.fseg.cl::before{left:0;border-left:2px dotted var(--sfg)}
+.fseg.cr::after{right:0;border-right:2px dotted var(--sfg)}
+.fseg.rsvd{--sfg:var(--ink3);--sbg:#F1F5F8}
+
+/* field colours, in the order the fields are declared */
+.c0{--sfg:#5B37D4;--sbg:#EDE9FC}
+.c1{--sfg:#0B4FA6;--sbg:#E5EDF8}
+.c2{--sfg:#0B7C7C;--sbg:#E0F0EF}
+.c3{--sfg:#8A6410;--sbg:#F8F0DF}
+.c4{--sfg:#B01B2E;--sbg:#FAE8EA}
+.c5{--sfg:#2E7A4B;--sbg:#E6F2E9}
+.c6{--sfg:#9C2483;--sbg:#F9E8F4}
+.c7{--sfg:#4A5878;--sbg:#EBEEF4}
+
+/* narrow fields give up the value, then the second index, then their name */
+@container (max-width:78px){.fseg .nm{font-size:11px}}
+@container (max-width:56px){.fseg .vl{display:none}}
+@container (max-width:52px){.fseg .ixs .lo{display:none}}
+@container (max-width:50px){.fseg .nm{font-size:10px;padding:0 2px}}
+@container (max-width:34px){.fseg .nm{font-size:9px;padding:0 1px;letter-spacing:-.03em}}
+@container (max-width:22px){.fseg .ixs{font-size:8px;padding:0 1px}}
+@container (max-width:18px){.fseg .nm{display:none}}
+@container (max-width:13px){.fseg .ixs{display:none}}
+
+/* ---------- field tables ---------- */
+.tscroll{overflow-x:auto}
+.ftab{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:12px}
+.ftab th{
+  font-family:var(--mono);font-size:10px;letter-spacing:.13em;text-transform:uppercase;
+  color:var(--ink2);font-weight:500;text-align:left;white-space:nowrap;
+  padding:0 14px 8px 0;border-bottom:1px solid var(--rule);
+}
+.ftab td{padding:5px 14px 5px 0;border-top:1px solid var(--rule2);white-space:nowrap;color:var(--ink)}
+.ftab th.r,.ftab td.r{text-align:right;padding-right:18px}
+.ftab th.c,.ftab td.c{text-align:center;padding-right:18px}
+.ftab tbody tr.hl{background:#F4F8FB}
+.ftab tbody tr.dim td{color:var(--ink3)}
+.ftab tfoot td{border-top:1.5px solid var(--rule);font-weight:500}
+.ftab .fn{display:flex;align-items:center;gap:8px}
+.ftab .sw{background:var(--sfg);flex:none}
+.ftab .sw.rsvd{background:var(--ink3);opacity:.45}
+.ftab input[type=checkbox]{width:15px;height:15px;accent-color:var(--sign);margin:0;cursor:pointer}
+.ftab input[type=checkbox]:disabled{cursor:not-allowed;opacity:.4}
+/* wide enough for the longest each box holds: a 64-bit word in hex, a Qm.n, and
+   a value printed to the seventeen digits that pin down a double */
+input.vin{
+  font-family:var(--mono);font-size:12px;color:var(--ink);width:21ch;
+  background:#F7F9FB;border:1px solid var(--rule);border-radius:3px;padding:4px 7px;
+}
+input.qin{width:10ch;text-transform:uppercase}
+input.tval{width:27ch}
+input.vin:disabled{background:#F1F5F8;color:var(--ink3);cursor:not-allowed}
+select.tin{
+  font-family:var(--mono);font-size:11px;color:var(--ink);cursor:pointer;
+  background:#F7F9FB;border:1px solid var(--rule);border-radius:3px;padding:4px 5px;
+}
+#wordin{font-family:var(--mono);font-size:18px;padding:8px 11px;width:min(420px,100%)}
+#dmeta{margin-top:10px}
+#dmeta .fkey + .fkey::before{content:"·";color:var(--rule);margin-right:6px}
+#vecdl{margin-top:16px;padding-top:2px}
+
+footer b{color:var(--ink2);font-weight:500}
+footer code{font-family:var(--mono);color:var(--ink2)}
+
+@media (max-width:860px){
+  .rlab{width:44px}
+  .rval{display:none}
+  .fseg .nm{font-size:11px}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div>
+      <div class="eyebrow">SystemRDL 2.0 · addrmap · regfile · reg</div>
+      <h1><span class="kw">field</span> layout, and what it holds</h1>
+      <p class="lede">Paste a SystemRDL register definition. Its fields are drawn in the vector the registers make, offset 0 at the bottom, and each one carries a value you can type into — read back as an integer, a Q format word or a float, which a comment beside the field can settle for you.</p>
+    </div>
+    <div class="stamp"><small id="stampkind">map</small><span id="stampname">—</span><small id="stampw">0 bits</small></div>
+  </header>
+
+  <div id="notes" role="status" aria-live="polite"></div>
+
+  <!-- SOURCE -->
+  <section class="panel">
+    <p class="legendline"><span>Definition</span><span class="hint">addrmap · regfile · reg · field · property</span></p>
+    <div class="field">
+      <label for="src">SystemRDL source</label>
+      <div class="editor" id="editor">
+        <div class="gutter" id="gutter" aria-hidden="true"></div>
+        <textarea id="src" spellcheck="false" autocomplete="off" autocapitalize="off" wrap="off">// Registers are laid end to end with offset 0 at the bottom of the vector.
+addrmap fir_ctrl {
+    name = "fir_ctrl";
+
+    default regwidth = 32;
+    default sw = rw;
+    default hw = r;
+
+    reg {
+        desc = "Control and status";
+
+        field { desc = "Operating mode"; } mode     [ 1: 0];
+        field { desc = "Run";            } enable   [ 2: 2];
+        field { desc = "Taps in use";    } taps     [11: 4];  // unsigned
+        field { desc = "Channel";        } channel  [19:16];  // unsigned
+        field { desc = "Revision";       } revision [31:28];
+    } control @ 0x0;
+
+    reg {
+        desc = "Coefficient pair";
+
+        field { desc = "Tap 1"; } tap1 [31:16];  // Q1.14
+        field { desc = "Tap 0"; } tap0 [15: 0];  // Q1.14
+    } coeff @ 0x4;
+};</textarea>
+      </div>
+    </div>
+    <div class="row" style="margin-top:14px">
+      <div class="field">
+        <label for="root">Component to draw</label>
+        <select id="root"></select>
+      </div>
+      <div class="field">
+        <span class="lbl">Draw words of</span>
+        <div class="seg" id="wbits" role="group" aria-label="How many bits to draw on one row">
+          <button type="button" data-v="8"  aria-pressed="false">8</button>
+          <button type="button" data-v="16" aria-pressed="false">16</button>
+          <button type="button" data-v="32" aria-pressed="true">32</button>
+          <button type="button" data-v="64" aria-pressed="false">64</button>
+        </div>
+      </div>
+      <div class="field">
+        <span class="lbl">Reserved fields</span>
+        <label class="check auto"><input type="checkbox" id="rsvd"><span>show _rsvd</span></label>
+      </div>
+    </div>
+    <div class="presets" id="presets"><span class="plbl">Examples</span></div>
+  </section>
+
+  <!-- DIAGRAM -->
+  <section class="panel" id="dpanel">
+    <p class="legendline"><span>Bit layout</span><span class="hint">hover a field to link it to the tables · click one to type its value</span></p>
+    <div id="diagram"></div>
+    <div class="fields" id="dmeta"></div>
+  </section>
+
+  <!-- VALUES -->
+  <section class="panel" id="vpanel">
+    <p class="legendline"><span>Values</span><span class="hint">hex 0x · binary 0b · octal 0o · decimal</span></p>
+    <div class="row">
+      <div class="field" style="flex:1 1 320px">
+        <label for="wordin">Whole vector</label>
+        <input type="text" class="vin" id="wordin" spellcheck="false" autocomplete="off">
+      </div>
+      <div class="field">
+        <span class="lbl">Fill it with</span>
+        <div class="seg" id="fill" role="group" aria-label="Set every bit of the vector at once">
+          <button type="button" data-v="zeros">zeros</button>
+          <button type="button" data-v="ones">ones</button>
+          <button type="button" data-v="random">random</button>
+        </div>
+      </div>
+    </div>
+    <dl id="vecdl">
+      <dt>Hex</dt>
+      <dd><span class="big" id="v-hex">—</span><button class="copy" data-copy="v-hex">copy</button></dd>
+      <dt>Decimal</dt>
+      <dd><span id="v-dec">—</span><button class="copy" data-copy="v-dec">copy</button></dd>
+      <dt>Binary</dt>
+      <dd><span id="v-bin">—</span><button class="copy" data-copy="v-bin">copy</button></dd>
+    </dl>
+    <div class="tscroll">
+      <table class="ftab">
+        <thead><tr>
+          <th>Field</th><th>Bits</th><th class="r">Width</th><th>Hex</th><th>Decimal</th>
+        </tr></thead>
+        <tbody id="vtbody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- VALUES BY TYPE -->
+  <section class="panel" id="tpanel">
+    <p class="legendline"><span>Values by type</span><span class="hint">a type for each field · a value in that type, or in hex</span></p>
+    <div class="tscroll">
+      <table class="ftab">
+        <thead><tr>
+          <th>Field</th><th>Bits</th><th class="r">Width</th><th>Read as</th>
+          <th class="c">Signed</th><th>Q format</th><th>Value</th><th>Hex</th>
+        </tr></thead>
+        <tbody id="ttbody"></tbody>
+        <tfoot id="tfoot"></tfoot>
+      </table>
+    </div>
+  </section>
+
+  <footer>
+    <b>Reading the map.</b> The registers are laid end to end with offset 0 at the bottom, so bit 0 of the register at offset 0 is bit 0 of the vector. The diagram reads the other way round, highest bits at the top, one row per word; tick marks step one bit each with a longer mark on every byte boundary, each field carries the bit index of its own two ends, and a field wider than the row is drawn on both rows with a dotted edge where it continues. The value at the end of a row is what that word of the vector holds.<br>
+    <b>Which component.</b> <b>Component to draw</b> offers every component the source names — an <code>addrmap</code>, a <code>regfile</code> or a <code>reg</code> — and under each map the registers it holds, each at the address it sits at. A register drawn on its own is drawn as its own vector, numbered from its bit 0 rather than from the bottom of the map, which is how its own documentation would have it; the address is repeated under the layout. A source that has just changed opens on the outermost component rather than on one of its registers, and every element of an array of registers is offered separately, at the address its stride puts it at.<br>
+    <b>Reserved.</b> Bits that no field claims come back as <code>_rsvd</code> members, and <b>show _rsvd</b> decides whether they are named in the diagram and listed in the tables below. It starts off, since a register map is read by its fields, but their bits belong to the vector either way: they are drawn in the layout, and the whole-vector value covers them whether they are listed or not.<br>
+    <b>Values.</b> A hex box takes a bit pattern: hex <code>0x</code>, binary <code>0b</code>, octal <code>0o</code> or plain decimal, with underscores and spaces ignored. Every field has one, in both tables, and so does the whole vector, and each writes only the bits it owns. A pattern too wide for the field it lands in is masked to the bits it has, the way the hardware would take it, and a negative decimal is read as two's complement. <b>zeros</b>, <b>ones</b> and <b>random</b> set the whole vector at once. The page opens on a fixed pattern, so there is something to read before you type.<br>
+    <b>Reading them back.</b> Each field is read as whatever its own <b>read as</b> says, so a coefficient can be fixed point in the same register as an integer count, and the vector itself takes the last row and reads the same way. <b>Signed</b> puts a two's complement sign bit on top of the field; a float carries its own sign, so the box is held for one. <b>Q format</b> takes the TI form Q<i>m</i>.<i>n</i>: <i>n</i> fraction bits, <i>m</i> integer bits, and the sign bit above them when there is one, which is why <i>m</i> follows the width and the sign on its own. A format whose bits do not add up to the width of the field is marked, and the value is still read with the <i>n</i> it asked for.<br>
+    <b>Which floats.</b> A field is offered the formats that are its width, named outright rather than as one float among them: <b>binary16</b> and <b>bf16</b> at sixteen bits, <b>binary32</b> at thirty-two, <b>binary64</b> at sixty-four, the OCP eight-bit pair <b>E4M3</b> and <b>E5M2</b>, and the four-bit pair <b>E2M1</b> and <b>E3M0</b>. A field of any other width is offered no float at all. Where a width carries two, the one it opens on is the IEEE format if there is one and the commoner of the two if there is not.<br>
+    <b>What a float keeps back.</b> IEEE 754 spends its top exponent on the infinities and the NaNs, and E5M2 follows it. E4M3 keeps back only the one word with every significand bit set, so its top exponent still counts up to 448. The four-bit formats keep nothing back: E2M1 runs to 6 and E3M0 to 16, and since neither has an infinity or a NaN there is nothing for a box to take when one is asked of it. A value past the end of a format becomes an infinity where the format has one and stops at its largest word where it does not.<br>
+    <b>A comment says what a field is.</b> A comment after the semicolon that ends a field says how to read it: <code>signed</code>, <code>unsigned</code>, a TI Q format such as <code>Q1.14</code> or <code>UQ2.14</code>, or a float — <code>float</code> for whichever format fits the field, or one named outright, as <code>BF16</code>, <code>binary16</code>, <code>FP8 (E4M3)</code>, <code>FP8 (E5M2)</code>, <code>FP4 (E2M1)</code>, <code>FP4 (E3M0)</code>, or any <code>E<i>e</i>M<i>m</i></code> shape one of those comes in. Either kind of comment carries it, and words the page does not know are passed over, so prose beside a field is not read as a type. A format that does not fit the field it sits beside is said out loud rather than used. Every element of an array of registers takes the comment written once in the component. Changing a comment moves that field to what it now says; changing a box by hand holds until the comment itself changes.<br>
+    <b>Values in a type.</b> The <b>value</b> box takes what its type reads — a whole number, a decimal for fixed point, or a decimal, <code>inf</code> or <code>nan</code> for a float. Unlike a bit pattern, a value out of range saturates at the nearest end of what the field holds rather than wrapping; a fixed point one is rounded to the nearest word with ties away from zero, and a float to nearest with ties to even, the way IEEE 754 asks. Every value is worked out in exact integer arithmetic and printed exactly wherever that is short enough to read; a longer one is printed to the seventeen significant digits that pin down a double, and either form typed back gives the same bits.<br>
+    <b>What the parser reads.</b> <code>addrmap</code>, <code>regfile</code> and <code>reg</code> components, named or anonymous, with their fields at an explicit bit range — <code>[11:4]</code> — or given a width, <code>[8]</code>, which SystemRDL packs from bit 0 upwards in the order they are declared, plus <code>regwidth</code>, <code>@</code> offsets, <code>+=</code> strides and array counts. A field whose <code>desc</code> reads like prose keeps its instance name; one that reads <code>name.field</code> is taken as a path, and a run of them becomes the structure it came from. Everything else in the file is skipped, and any line it could not read is marked in the line numbers. Two fields that would land on one name take their register's name with them, so <code>chan[4]</code> comes back as <code>chan_0_burst</code> and its three siblings.<br>
+    <b>The other direction.</b> <a href="struct-visualizer.html">struct-visualizer.html</a> starts from a SystemVerilog <code>struct packed</code> and writes the SystemRDL, C and Python for it. Both pages read a register map the same way, so an addrmap moves between them unchanged.
+  </footer>
+</div>
+
+<script src="sv-struct.js"></script>
+<script src="fixed-point.js"></script>
+<script>
+"use strict";
+(function(){
+  const $ = id => document.getElementById(id);
+  const {pow2, exactDec, ratSci, groupBits, qStr, parseQ, parseDecimal, quantize,
+         floatsFor, floatNamed, floatNaN, floatInf, unpackFloat, packFloat,
+         press, initCopyButtons} = FP;
+  const src = $("src"), sel = $("root"), diagram = $("diagram");
+  const gutter = $("gutter"), editor = $("editor");
+  const COLORS = 8;
+  /* What a value can be read as. A float is offered only where one is that wide,
+     and the first format for a width is the one a field opens on. */
+  const typesFor = w => [["int","integer"], ["fix","fixed point"]]
+    .concat(floatsFor(w).map(f => [f.key, f.label]));
+  /* what the vector opens on, so the tables have something in them */
+  const PATTERN = 0x0123456789ABCDEFn;
+
+  /* ---------- state ---------- */
+  let view = null;          // the vector on screen
+  let slots = [];           // per segment, the nodes that show its value
+  let whole = null;         // the vector itself, as one more row of the type table
+  let rows = [];            // per drawn row, the node that shows that word
+  let word = null;          // what the vector holds; null until a layout seeds it
+  let drawn = null;         // which component of the source is on screen
+  let notes = [];
+  let wordBits = 32;        // how many bits a row, and so a word, is drawn as
+  const typing = new Map(); // how each field is read, kept across re-renders
+
+  /* ---------- bits ---------- */
+  const mask = w => pow2(w) - 1n;
+  const cut = (v,lo,w) => (v >> BigInt(lo)) & mask(w);
+  const hex = (v,w) => "0x" + v.toString(16).toUpperCase().padStart(Math.ceil(w/4), "0");
+  const twos = (v,w) => v >= pow2(w-1) ? v - pow2(w) : v;
+  const range = s => s.hi===s.lo ? "["+s.hi+"]" : "["+s.hi+":"+s.lo+"]";
+  const bitsText = w => w + (w===1 ? " bit" : " bits");
+  const at = addr => "0x" + addr.toString(16).toUpperCase();
+  const reserved = s => s.pad || s.us;
+  const listed = s => !reserved(s) || $("rsvd").checked;
+
+  /* p / 2^k as decimal text that can be typed straight back in: exactly where
+     that is short enough to read, otherwise to the seventeen significant digits
+     that pin down a double. */
+  function decText(p,k){
+    const num = k < 0 ? p << BigInt(-k) : p;
+    const exact = k > 0 ? exactDec(p,k) : num.toString();
+    return exact.length <= 24 ? exact : ratSci(num, k > 0 ? pow2(k) : 1n, 17);
+  }
+
+  // hex, binary, octal or decimal text to the bits it sets; negatives wrap
+  function parseBits(text,w){
+    const t = String(text).trim().replace(/[_,\s]/g,"");
+    if(!t || w < 1) return null;
+    const neg = t.charAt(0)==="-";
+    const body = t.replace(/^[+-]/,"");
+    if(!/^(?:0[xX][0-9a-fA-F]+|0[bB][01]+|0[oO][0-7]+|[0-9]+)$/.test(body)) return null;
+    const m = pow2(w);
+    const v = (neg ? -BigInt(body) : BigInt(body)) % m;
+    return v < 0n ? v + m : v;
+  }
+
+  function seed(w){
+    let v = 0n;
+    for(let at=0; at<w; at+=64) v |= PATTERN << BigInt(at);
+    return v & mask(w);
+  }
+
+  function fill(w){
+    let v = 0n;
+    for(let at=0; at<w; at+=32) v |= BigInt(Math.floor(Math.random() * 4294967296)) << BigInt(at);
+    return v & mask(w);
+  }
+
+  /* ---------- small DOM helpers ---------- */
+  function el(tag,cls,text){
+    const e = document.createElement(tag);
+    if(cls) e.className = cls;
+    if(text !== undefined) e.textContent = text;
+    return e;
+  }
+
+  /* ---------- line numbers ----------
+     Lines the page had something to say about are marked, so a note that names
+     a line can be found in the source. */
+  function drawGutter(flagged){
+    const lines = src.value.split("\n").length;
+    const sig = lines + "|" + flagged.join(",");
+    if(gutter._sig !== sig){
+      gutter._sig = sig;
+      const bad = {};
+      flagged.forEach(n => { bad[n] = true; });
+      let html = "";
+      for(let i=1;i<=lines;i++) html += bad[i] ? '<div class="bad">'+i+"</div>" : "<div>"+i+"</div>";
+      gutter.innerHTML = html;
+      editor.style.setProperty("--dg", String(lines).length);
+    }
+    gutter.scrollTop = src.scrollTop;
+  }
+  const lineOf = msg => { const m = /^line (\d+):/.exec(msg); return m ? +m[1] : 0; };
+  src.addEventListener("scroll", () => { gutter.scrollTop = src.scrollTop; });
+
+  /* ---------- notes ---------- */
+  const note = (kind,label,msg) => {
+    if(!notes.some(n => n.msg === msg)) notes.push({kind,label,msg});
+  };
+  function drawNotes(){
+    const box = $("notes");
+    box.innerHTML = "";
+    for(const nt of notes){
+      const d = el("div","note "+nt.kind);
+      d.appendChild(el("b","",nt.label));
+      d.appendChild(el("span","",nt.msg));
+      box.appendChild(d);
+    }
+  }
+
+  /* ---------- render ---------- */
+  function render(){
+    notes = [];
+    const parsed = SV.parseRdl(src.value, {registers:true});
+    syncRoots(parsed.roots);
+    const res = SV.views(parsed, sel.value, {flatten:true});
+    view = (res.views || [])[0] || null;
+    drawn = res.root || null;
+
+    if(!view){
+      slots = []; rows = []; whole = null;
+      diagram.innerHTML = "";
+      ["vtbody","ttbody","tfoot"].forEach(id => { $(id).innerHTML = ""; });
+      note("alert","Layout", res.error ||
+           "Nothing to draw yet — add an addrmap, a regfile or a reg with fields in it.");
+    } else {
+      colour(view);
+      word = word === null ? seed(view.width) : word & mask(view.width);
+      slots = view.segs.map(s => ({seg:s, vls:[]}));
+      drawDiagram();
+      drawTables();
+    }
+    drawSummary();
+    paint();
+    ["dpanel","vpanel","tpanel"].forEach(id => $(id).classList.toggle("faded", !view));
+
+    if(parsed.skipped.length){
+      const shown = parsed.skipped.slice(0,6).join(", ");
+      note("warn","Skipped","Nothing this page understands on line " + shown +
+           (parsed.skipped.length>6 ? " (and "+(parsed.skipped.length-6)+" more)" : "") + ".");
+    }
+    (res.warn||[]).forEach(w => note("warn","Check",w));
+    drawNotes();
+    drawGutter(parsed.skipped.concat((res.warn||[]).map(lineOf).filter(Boolean)));
+  }
+
+  /* A colour per declared field, in the order they are declared; reserved bits
+     stay grey. A leaf name is enough on its own unless a sibling shares it. */
+  function colour(v){
+    const seen = {};
+    let next = 0;
+    v.segs.forEach(s => { if(!reserved(s)) seen[s.name] = (seen[s.name]||0) + 1; });
+    v.segs.forEach(s => {
+      s.color = reserved(s) ? -1 : (next++ % COLORS);
+      s.disp = s.pad ? "reserved" : (seen[s.name] > 1 ? s.path : s.name);
+    });
+  }
+
+  function drawSummary(){
+    const meta = $("dmeta");
+    const spot = drawn && drawn.addr !== undefined ? drawn.addr : null;
+    meta.innerHTML = "";
+    $("stampkind").textContent = drawn ? (drawn.kind === "addrmap" ? "map" : drawn.kind) : "map";
+    $("stampname").textContent = view ? view.label : "—";
+    $("stampw").textContent = view ? bitsText(view.width) : "0 bits";
+    if(!view) return;
+
+    const fields = view.segs.filter(s => !reserved(s)).length;
+    const spare = view.segs.reduce((a,s) => a + (reserved(s) ? s.w : 0), 0);
+    const bytes = view.width / 8;
+    [ spot === null ? null : "at " + at(spot),
+      bitsText(view.width),
+      (Number.isInteger(bytes) ? bytes : bytes.toFixed(3)) + " bytes",
+      fields + (fields===1 ? " field" : " fields"),
+      spare ? spare + " reserved bits" : null,
+      "words of " + wordBits
+    ].filter(Boolean).forEach(t => meta.appendChild(el("span","fkey",t)));
+  }
+
+  /* ---------- the vector, drawn ---------- */
+  function drawDiagram(){
+    diagram.innerHTML = "";
+    rows = [];
+    slots.forEach(slot => { slot.vls.length = 0; });
+    const words = Math.max(1, Math.ceil(view.width / wordBits));
+    for(let k=words-1;k>=0;k--){
+      const lo = k * wordBits;
+      diagram.appendChild(drawRow(Math.min(view.width-1, lo + wordBits - 1), lo));
+    }
+  }
+
+  function drawRow(rowHi,rowLo){
+    const used = rowHi - rowLo + 1;
+    const row = el("div","drow");
+    row.appendChild(el("div","rlab", used===1 ? String(rowHi) : rowHi + ":" + rowLo));
+
+    const dt = el("div","dtrack");
+    dt.style.setProperty("--n", wordBits);
+    const span = (wordBits - used + 1) + " / span " + used;
+
+    const track = el("div","track");
+    track.style.setProperty("--n", used);
+    track.style.gridColumn = span;
+    track.setAttribute("aria-label", "bits " + rowHi + " down to " + rowLo);
+    for(const s of view.segs){
+      if(s.hi < rowLo || s.lo > rowHi) continue;
+      track.appendChild(drawSeg(s, Math.min(s.hi,rowHi), Math.max(s.lo,rowLo), rowHi));
+    }
+
+    const ticks = el("div","ticks");
+    ticks.style.setProperty("--n", used);
+    ticks.style.gridColumn = span;
+    ticks.setAttribute("aria-hidden","true");
+    for(let b=rowHi;b>=rowLo;b--)
+      ticks.appendChild(el("i", (b+1)%8===0 ? "b" : (b+1)%4===0 ? "q" : ""));
+
+    dt.appendChild(track);
+    dt.appendChild(ticks);
+    row.appendChild(dt);
+
+    const val = el("div","rval");
+    row.appendChild(val);
+    rows.push({node:val, lo:rowLo, w:used});
+    return row;
+  }
+
+  function drawSeg(s,chi,clo,rowHi){
+    const b = el("button", ["fseg",
+      reserved(s) ? "rsvd" : "c" + s.color,
+      chi===clo ? "one" : "",
+      chi < s.hi ? "cl" : "",
+      clo > s.lo ? "cr" : ""
+    ].filter(Boolean).join(" "));
+    b.type = "button";
+    b.dataset.seg = s.idx;
+    b.style.gridColumn = (rowHi - chi + 1) + " / span " + (chi - clo + 1);
+    b.title = (listed(s) ? s.path : "reserved") + "  " + range(s) + "  " +
+              s.w + (s.w===1 ? " bit" : " bits");
+    b.setAttribute("aria-label", b.title);
+
+    const ixs = el("div","ixs");
+    ixs.appendChild(el("i","hi", String(chi)));
+    if(chi !== clo) ixs.appendChild(el("i","lo", String(clo)));
+    b.appendChild(ixs);
+    b.appendChild(el("div","nm", listed(s) ? s.disp : ""));
+    const vl = el("div","vl");
+    b.appendChild(vl);
+    slots[s.idx].vls.push(vl);
+    return b;
+  }
+
+  /* ---------- the two tables ----------
+     Both are keyed to the segment they came from, so hovering either one lights
+     up the field in the diagram, and both are rebuilt only when the layout
+     moves. Everything that changes with a value is written in place by paint. */
+  function drawTables(){
+    const vbody = $("vtbody"), tbody = $("ttbody"), tfoot = $("tfoot");
+    vbody.innerHTML = ""; tbody.innerHTML = ""; tfoot.innerHTML = "";
+    for(const slot of slots){
+      const s = slot.seg;
+      slot.input = slot.dec = slot.tin = null;
+      if(!listed(s)) continue;
+      slot.set = settingsFor(s);
+
+      const vrow = rowHead(s);
+      slot.input = box("vin", s.path + " in hex");
+      vrow.appendChild(cell(slot.input));
+      slot.dec = el("td");
+      vrow.appendChild(slot.dec);
+      vbody.appendChild(vrow);
+
+      tbody.appendChild(typedRow(slot));
+    }
+    /* The vector reads like one more field, so it takes a row of its own. Its
+       hex box is the one at the top of the panel above. */
+    const s = {path:view.label, name:view.label, disp:view.label, color:-1,
+               hi:view.width-1, lo:0, w:view.width, idx:-1};
+    whole = {seg:s, set:settingsFor(s), vls:[], input:$("wordin"), dec:$("v-dec")};
+    tfoot.appendChild(typedRow(whole));
+  }
+
+  // the three columns both tables open with: which field, which bits, how many
+  function rowHead(s){
+    const tr = el("tr", reserved(s) ? "dim" : "");
+    tr.dataset.seg = s.idx;
+    const name = el("div","fn");
+    name.appendChild(el("i","sw" + (s.color >= 0 ? " c" + s.color : " rsvd")));
+    name.appendChild(el("span","", s.disp));
+    const first = el("td");
+    first.appendChild(name);
+    tr.appendChild(first);
+    tr.appendChild(el("td","", range(s)));
+    tr.appendChild(el("td","r", String(s.w)));
+    return tr;
+  }
+
+  const cell = (node,cls) => {
+    const td = el("td",cls);
+    td.appendChild(node);
+    return td;
+  };
+
+  function box(cls,label){
+    const inp = el("input",cls);
+    inp.type = "text";
+    inp.spellcheck = false;
+    inp.autocomplete = "off";
+    inp.setAttribute("aria-label", label);
+    return inp;
+  }
+
+  /* One row of the type table: how to read this field, then its value in that
+     type and in hex. The sign is a bare checkbox, named by its column alone. */
+  function typedRow(slot){
+    const s = slot.seg;
+    const tr = rowHead(s);
+
+    slot.tin = el("select","tin");
+    typesFor(s.w).forEach(([value,label]) => {
+      const option = el("option","",label);
+      option.value = value;
+      slot.tin.appendChild(option);
+    });
+    slot.tin.setAttribute("aria-label", "read " + s.path + " as");
+    tr.appendChild(cell(slot.tin));
+
+    slot.sin = el("input","sin");
+    slot.sin.type = "checkbox";
+    slot.sin.setAttribute("aria-label", s.path + " is signed");
+    tr.appendChild(cell(slot.sin, "c"));
+
+    slot.qin = box("vin qin", "Q format of " + s.path);
+    tr.appendChild(cell(slot.qin));
+    slot.tval = box("vin tval", "value of " + s.path);
+    tr.appendChild(cell(slot.tval));
+    slot.thex = box("vin", s.path + " in hex");
+    tr.appendChild(cell(slot.thex));
+    return tr;
+  }
+
+  /* ---------- what everything holds ---------- */
+  // the box being typed in is the one thing left alone, so an edit is not undone
+  function put(inp,text){
+    if(inp === document.activeElement) return;
+    inp.value = text;
+    inp.classList.remove("bad");
+  }
+
+  function paint(){
+    if(!view){
+      ["v-hex","v-dec","v-bin"].forEach(id => { $(id).textContent = "—"; });
+      $("wordin").value = "";
+      return;
+    }
+    for(const r of rows) r.node.textContent = hex(cut(word, r.lo, r.w), r.w);
+    for(const slot of slots) paintSlot(slot);
+    if(whole) paintSlot(whole);
+    $("v-hex").textContent = hex(word, view.width);
+    $("v-bin").textContent = groupBits(word.toString(2).padStart(view.width,"0"));
+  }
+
+  function paintSlot(slot){
+    const s = slot.seg, v = cut(word, s.lo, s.w), hx = hex(v, s.w);
+    for(const node of slot.vls) node.textContent = hx;
+    if(slot.input) put(slot.input, hx);
+    if(slot.dec) slot.dec.textContent = v.toString();
+    if(!slot.tin) return;
+
+    const set = slot.set, fixed = set.type === "fix";
+    slot.tin.value = set.type === "flt" ? set.fmt : set.type;
+    slot.tin.title = set.from ? "the source says " + set.from : "";
+    slot.sin.checked = set.signed;
+    slot.sin.disabled = set.type === "flt";
+    slot.qin.disabled = !fixed;
+    put(slot.qin, fixed ? qStr(set) : "");
+    slot.qin.classList.toggle("bad", fixed && !qFits(slot));
+    put(slot.tval, typedText(slot, v));
+    put(slot.thex, hx);
+  }
+
+  /* ---------- reading a value as a type ----------
+     Each field carries its own type, its own sign and, for a fixed point one,
+     its own Q format. They are held by name and width, so editing the source or
+     hiding the reserved runs does not lose what a field was set to, and a field
+     takes what the comment beside it says the first time that comment is seen. */
+  function settingsFor(s){
+    const key = s.path + ":" + s.w;
+    let set = typing.get(key);
+    if(!set){
+      set = {type:"int", signed:true, n:Math.max(0, s.w - 1), m:0, fmt:null, from:null};
+      fitQ(set, s.w);
+      typing.set(key, set);
+    }
+    if(set.seen !== s.note){                     // the source has something new to say
+      set.seen = s.note;
+      const said = readNote(s.note, s.w);
+      if(said && said.wrong)
+        note("warn","Type", s.path + " is " + bitsText(s.w) + ", so the " + said.wrong +
+             " beside it does not fit and was left out.");
+      set.from = said && said.type ? s.note : null;
+      if(said && said.type){
+        delete said.wrong;
+        Object.assign(set, said);
+        if(set.type !== "fix") fitQ(set, s.w);
+      }
+    }
+    const fmt = set.type === "flt" ? floatNamed(set.fmt) : null;
+    if(set.type === "flt" && (!fmt || fmt.bits !== s.w)){
+      const first = floatsFor(s.w)[0];           // the field moved out from under the format
+      if(first) set.fmt = first.key; else set.type = "int";
+    }
+    return set;
+  }
+
+  /* The picker offers integer, fixed point and a float format by name, so a
+     float arrives as the format it is rather than as a type on its own. */
+  function chooseType(set,picked){
+    set.type = picked === "int" || picked === "fix" ? picked : "flt";
+    if(set.type === "flt") set.fmt = picked;
+  }
+
+  /* A comment after a field says how to read it: `signed`, `unsigned`, a TI Q
+     format such as `Q1.14` or `UQ0.16`, or a float — `float` for the one that
+     fits the field, or a named one such as `BF16` or `FP8 (E4M3)`. Words it does
+     not know are passed over, so prose beside a field is not read as a type. */
+  function readNote(text,w){
+    if(!text) return null;
+    const said = {};
+    for(const word of String(text).toLowerCase().split(/[\s(),;]+/)){
+      if(word === "signed" || word === "unsigned"){
+        said.signed = word === "signed";
+      } else if(/^u?q\d+(\.\d+)?$/.test(word)){
+        const q = parseQ(word.replace(/^u/,""));
+        if(!q) continue;
+        said.type = "fix";
+        said.m = q.m;
+        said.n = q.n;
+        if(word.charAt(0) === "u") said.signed = false;
+      } else {
+        const f = word === "float" ? floatsFor(w)[0] : floatNamed(word);
+        if(!f) continue;
+        if(f.bits !== w){ said.wrong = f.label; continue; }
+        said.type = "flt";
+        said.fmt = f.key;
+      }
+    }
+    if(said.type === undefined && said.signed !== undefined) said.type = "int";
+    return said.type === undefined && said.wrong === undefined ? null : said;
+  }
+
+  /* TI convention: Qm.n is m integer bits and n fraction bits, with the sign bit
+     on top of them. Keeping m to what the field has left over means the format
+     always describes the field, however the sign is set. */
+  function fitQ(set,w){
+    set.n = Math.max(0, Math.min(set.n, w - (set.signed ? 1 : 0)));
+    set.m = w - set.n - (set.signed ? 1 : 0);
+  }
+  const qFits = slot =>
+    slot.set.m + slot.set.n + (slot.set.signed ? 1 : 0) === slot.seg.w;
+
+  const fmtOf = slot => floatNamed(slot.set.fmt);
+
+  function typedText(slot,v){
+    const set = slot.set, w = slot.seg.w;
+    if(set.type === "flt") return floatText(v, fmtOf(slot));
+    const val = set.signed ? twos(v,w) : v;
+    return set.type === "int" ? val.toString() : exactDec(val, set.n);
+  }
+
+  /* A float word holds a signed significand over a power of two, which is what
+     decText prints, so every format comes out exactly. */
+  function floatText(v,f){
+    if(!f) return "";
+    const held = unpackFloat(v,f);
+    if(held.nan) return "NaN";
+    if(held.inf) return held.neg ? "-inf" : "inf";
+    if(held.p === 0n) return held.neg ? "-0" : "0";
+    return decText(held.p, held.k);
+  }
+
+  /* ---------- a value typed in the type it is read as ---------- */
+  // what the field can hold, saturating: a magnitude is clipped, not wrapped
+  function clip(v,w,signed){
+    const hi = signed ? pow2(w-1) - 1n : pow2(w) - 1n;
+    const lo = signed ? -pow2(w-1) : 0n;
+    const held = v > hi ? hi : v < lo ? lo : v;
+    return held < 0n ? held + pow2(w) : held;
+  }
+
+  function fromTyped(slot,text){
+    const set = slot.set, w = slot.seg.w;
+    if(set.type === "flt") return fromFloat(text, fmtOf(slot));
+    const r = parseDecimal(text);
+    if(!r) return null;
+    if(set.type === "int" && r.q !== 1n) return null;      // an integer box takes integers
+    return clip(set.type === "int" ? r.p : quantize(r.p, r.q, set.n, "near"), w, set.signed);
+  }
+
+  /* A format without an infinity, or without a NaN, has nothing to write for one
+     asked of it, so the box says as much rather than taking it. */
+  function fromFloat(text,f){
+    if(!f) return null;
+    const t = String(text).trim().toLowerCase();
+    const body = t.replace(/^[+-]/,"");
+    if(body === "nan") return floatNaN(f);
+    if(body === "inf" || body === "infinity") return floatInf(f, t.charAt(0)==="-");
+    const r = parseDecimal(text);
+    if(!r) return null;
+    const bits = packFloat(r,f);
+    return r.p === 0n && t.charAt(0)==="-" ? bits | pow2(f.bits - 1) : bits;
+  }
+
+  /* ---------- linking the diagram to the tables ---------- */
+  let hot = null;
+  const mark = (key,on) =>
+    document.querySelectorAll('[data-seg="'+key+'"]').forEach(e => e.classList.toggle("hl", on));
+  function setHot(key){
+    if(hot === key) return;
+    if(hot !== null) mark(hot, false);
+    hot = key;
+    if(hot !== null) mark(hot, true);
+  }
+  document.addEventListener("mouseover", e => {
+    const t = e.target.closest ? e.target.closest("[data-seg]") : null;
+    setHot(t ? t.dataset.seg : null);
+  });
+  document.addEventListener("mouseleave", () => setHot(null));
+
+  const slotAt = ix => ix < 0 ? whole : slots[ix];
+
+  diagram.addEventListener("click", e => {
+    const b = e.target.closest(".fseg");
+    const slot = b ? slotAt(+b.dataset.seg) : null;
+    if(slot && slot.input){ slot.input.focus(); slot.input.select(); }
+  });
+
+  /* ---------- component picker ----------
+     Every component the source names, and under each map the registers it
+     holds, at the address each one sits at. A source that has just changed
+     opens on the outermost component rather than on one of its registers. */
+  function syncRoots(roots){
+    const names = roots.map(r => r.name);
+    const already = Array.prototype.map.call(sel.options, o => o.value);
+    if(names.join("\u0000") === already.join("\u0000")) return;
+    const keep = sel.value;
+    sel.innerHTML = "";
+    roots.forEach(r => {
+      const o = document.createElement("option");
+      o.value = r.name;
+      o.textContent = r.name + "  (" + r.kind + (r.addr === undefined ? "" : " @ " + at(r.addr)) + ")";
+      sel.appendChild(o);
+    });
+    const whole = roots.filter(r => r.addr === undefined);
+    const opens = (whole.length ? whole : roots).slice(-1)[0];
+    sel.value = names.indexOf(keep) >= 0 ? keep : (opens ? opens.name : "");
+  }
+
+  /* ---------- controls ---------- */
+  src.addEventListener("input", render);
+  sel.addEventListener("change", () => { word = null; render(); });
+  $("rsvd").addEventListener("change", render);
+
+  $("wbits").addEventListener("click", e => {
+    const b = e.target.closest("button");
+    if(!b) return;
+    wordBits = +b.dataset.v;
+    press($("wbits"), b);
+    if(!view) return;
+    drawDiagram();
+    drawSummary();
+    paint();
+  });
+
+  $("fill").addEventListener("click", e => {
+    const b = e.target.closest("button");
+    if(!b || !view) return;
+    word = b.dataset.v === "ones" ? mask(view.width)
+         : b.dataset.v === "random" ? fill(view.width) : 0n;
+    paint();
+  });
+
+  /* ---------- typing a value in ----------
+     Every box belongs to one field, or to the vector itself, and writes only the
+     bits that field owns. Leaving a box is where what it holds goes back in,
+     however it was typed, since paint leaves alone only the box in hand. */
+  const slotFor = node => {
+    const row = node.closest("tr");
+    return row ? slotAt(+row.dataset.seg) : whole;    // the vector's hex box sits above
+  };
+
+  function setBits(seg,v){
+    const at = BigInt(seg.lo);
+    word = (word & ~(mask(seg.w) << at)) | (v << at);
+    paint();
+  }
+
+  function boxEdited(box,slot){
+    if(box.classList.contains("qin")){
+      const q = parseQ(box.value);
+      if(!q){ box.classList.add("bad"); return; }
+      slot.set.m = q.m;
+      slot.set.n = q.n;
+      paint();                       // which marks the box if that does not fit
+      return;
+    }
+    const inType = box.classList.contains("tval");
+    const v = inType ? fromTyped(slot, box.value) : parseBits(box.value, slot.seg.w);
+    if(v === null){ box.classList.add("bad"); return; }
+    box.classList.remove("bad");
+    setBits(slot.seg, v);
+  }
+
+  [$("vpanel"), $("tpanel")].forEach(panel => {
+    panel.addEventListener("input", e => {
+      const box = e.target;
+      if(!view || !box.classList || !box.classList.contains("vin")) return;
+      const slot = slotFor(box);
+      if(slot) boxEdited(box, slot);
+    });
+    panel.addEventListener("focusout", () => paint());
+    panel.addEventListener("change", e => {
+      const box = e.target;
+      if(!view || !box.classList) return;
+      const slot = slotFor(box);
+      if(!slot) return;
+      if(box.classList.contains("tin")) chooseType(slot.set, box.value);
+      else if(box.classList.contains("sin")){
+        slot.set.signed = box.checked;
+        fitQ(slot.set, slot.seg.w);
+      } else return;
+      paint();
+    });
+  });
+
+  /* ---------- examples ---------- */
+  const EXAMPLES = [
+    ["fir control", src.value],
+
+    ["gpio", `// Two registers, and the bits between them nobody claimed.
+addrmap gpio {
+    default regwidth = 32;
+    default sw = rw;
+    default hw = r;
+
+    reg {
+        field { desc = "Pin direction"; } direction [31:16];
+        field { desc = "Output value";  } out_value [15: 0];
+    } gpio_pins @ 0x0;
+
+    reg {
+        field { desc = "Interrupt enable"; } irq_enable [23: 8];
+        field { desc = "Interrupt mode";   } irq_mode   [ 7: 4];
+    } gpio_irq @ 0x4;
+};`],
+
+    ["dma channels", `// One register component instantiated four times, striding by four bytes.
+// These fields are given a width rather than a range, so they pack from bit 0.
+addrmap dma {
+    default regwidth = 32;
+    default sw = rw;
+    default hw = r;
+
+    reg chan_ctrl {
+        field { desc = "Burst size"; } burst  [4];
+        field { desc = "Priority";   } prio   [4];
+        field { desc = "Started";    } active [1];
+    };
+
+    chan_ctrl chan[4] @ 0x0 += 0x4;
+};`],
+
+    ["uart ports", `// A regfile placed twice, in 16-bit registers.
+addrmap uart {
+    default regwidth = 16;
+    default sw = rw;
+    default hw = r;
+
+    regfile port {
+        reg {
+            field { desc = "Baud divisor"; } divisor [11:0];
+        } baud @ 0x0;
+
+        reg {
+            field { desc = "Parity";    } parity [1:0];
+            field { desc = "Stop bits"; } stop   [3:3];
+        } line @ 0x2;
+    };
+
+    port p0 @ 0x0;
+    port p1 @ 0x4;
+};`],
+
+    ["ieee 754", `// 'float' takes the format that fits the field, and a name settles it
+// where more than one does: these two are the same width, read differently.
+addrmap dac_cal {
+    default regwidth = 32;
+    default sw = rw;
+    default hw = r;
+
+    reg {
+        desc = "Gain";
+
+        field { desc = "Gain"; } gain [31:0];  // float
+    } dac_gain @ 0x0;
+
+    reg {
+        desc = "Offsets";
+
+        field { desc = "Offset B"; } offset_b [31:16];  // BF16
+        field { desc = "Offset A"; } offset_a [15: 0];  // binary16
+    } dac_offset @ 0x4;
+};`],
+
+    ["fp8 and fp4", `// The narrow formats an accelerator packs its weights into.
+addrmap tensor_cfg {
+    default regwidth = 32;
+    default sw = rw;
+    default hw = r;
+
+    reg {
+        desc = "Block scale";
+
+        field { desc = "Scale";      } scale    [31:16];  // BF16
+        field { desc = "Exponent";   } exponent [15: 8];  // FP8 (E5M2)
+        field { desc = "Zero point"; } zero_pt  [ 7: 0];  // signed
+    } scaling @ 0x0;
+
+    reg {
+        desc = "Four weights and how they were rounded";
+
+        field { desc = "Weight 3"; } wt3  [31:24];  // FP8 (E4M3)
+        field { desc = "Weight 2"; } wt2  [23:16];  // FP8 (E4M3)
+        field { desc = "Weight 1"; } wt1  [15:12];  // FP4 (E2M1)
+        field { desc = "Weight 0"; } wt0  [11: 8];  // FP4 (E3M0)
+        field { desc = "Rounding"; } mode [ 1: 0];  // unsigned
+    } weights @ 0x4;
+};`],
+
+    ["q1.14 taps", `// A Q format beside a field is read the TI way: n fraction bits,
+// with the sign bit above the m integer bits.
+addrmap fir_taps {
+    default regwidth = 32;
+    default sw = rw;
+    default hw = r;
+
+    reg tap_pair {
+        field { desc = "Odd tap";  } odd  [31:16];  // Q1.14
+        field { desc = "Even tap"; } even [15: 0];  // UQ2.14
+    };
+
+    tap_pair pair[2] @ 0x0 += 0x4;
+};`]
+  ];
+
+  const presets = $("presets");
+  EXAMPLES.forEach(([name,text]) => {
+    const b = el("button","",name);
+    b.type = "button";
+    b.addEventListener("click", () => {
+      src.value = text;
+      src.scrollTop = 0; src.scrollLeft = 0;
+      sel.innerHTML = "";
+      word = null;                             // a new map, so a fresh pattern
+      typing.clear();                          // and its own comments to read
+      render();
+    });
+    presets.appendChild(b);
+  });
+
+  initCopyButtons();
+  render();
+})();
+</script>
+</body>
+</html>
