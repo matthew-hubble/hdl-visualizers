@@ -105,16 +105,27 @@ var SV = (function(){
   const OP2 = {"**":1,"<<":1,">>":1,"::":1,"==":1,"!=":1,"&&":1,"||":1,">=":1,"<=":1,
                "+=":1,"-=":1,"%=":1,"->":1};
 
-  function lex(src){
+  /* `notes`, when the caller wants it, collects the comment on each line, which
+     is where SystemRDL carries what a field is meant to hold. The tokens
+     themselves never see one, so nothing downstream has to step over it. */
+  function lex(src,notes){
     const t = [], n = src.length;
     let i = 0, ln = 1;
+    const note = text => { if(notes) notes[ln] = text.trim(); };
     while(i<n){
       const c = src[i];
       if(c==="\n"){ ln++; i++; continue; }
       if(c===" "||c==="\t"||c==="\r"||c==="\f"||c==="\v"){ i++; continue; }
-      if(c==="/"&&src[i+1]==="/"){ while(i<n && src[i]!=="\n") i++; continue; }
+      if(c==="/"&&src[i+1]==="/"){
+        const from = i + 2;
+        while(i<n && src[i]!=="\n") i++;
+        note(src.slice(from,i));
+        continue;
+      }
       if(c==="/"&&src[i+1]==="*"){
         let e = src.indexOf("*/", i+2); if(e<0) e = n;
+        const inside = src.slice(i+2,e);
+        if(inside.indexOf("\n") < 0) note(inside);
         for(let j=i;j<e;j++) if(src[j]==="\n") ln++;
         i = e+2; continue;
       }
@@ -526,9 +537,13 @@ var SV = (function(){
   const RDL_LEAD = {external:1, internal:1, abstract:1, alias:1};
   const RDL_ROOTABLE = {addrmap:1, regfile:1, reg:1};
 
-  function parseRdl(text){
-    const st = {T:lex(String(text==null ? "" : text)), p:0, params:new Map(),
-                skipped:[], defs:new Map(), tops:[]};
+  /* `opts.registers` puts every register a map holds on the list of roots as
+     well, so one can be drawn on its own. Each carries the address it sits at,
+     which is what names a register to anyone reading the map. */
+  function parseRdl(text,opts){
+    const notes = {};
+    const st = {T:lex(String(text==null ? "" : text), notes), p:0, params:new Map(),
+                skipped:[], defs:new Map(), tops:[], notes};
     const scope = {kind:"root", props:{}, defaults:{}, children:[]};
     let guard = 0;
     while(cur(st).k!=="eof"){
@@ -538,14 +553,33 @@ var SV = (function(){
       if(++guard > 200000) break;
     }
     const types = new Map(), roots = [];
+    const wanted = !!(opts && opts.registers);
     st.tops.forEach(top => types.set(top.name, null));     // hold the name
     st.tops.forEach(top => {
-      const built = rdlStruct(st,top,types);
-      if(!built){ types.delete(top.name); return; }
-      types.set(top.name, built);
-      roots.push({name:top.name, type:built, kind:top.comp.kind, line:top.comp.line});
+      const regs = wanted ? [] : null;
+      const built = rdlStruct(st,top,types,regs);
+      if(built){
+        types.set(top.name, built);
+        roots.push({name:top.name, type:built, kind:top.comp.kind, line:top.comp.line});
+      } else {
+        types.delete(top.name);
+      }
+      if(regs) regRoots(st,regs,types,roots);
     });
     return {types, params:st.params, roots, skipped:st.skipped, rdl:true};
+  }
+
+  /* One register drawn on its own holds the fields it carries at the bits it
+     carries them in, rather than at the bits laying the whole map end to end
+     puts them. A map too wide to lay out still offers its registers. */
+  function regRoots(st,regs,types,roots){
+    const taken = {};
+    roots.forEach(r => { taken[r.name] = 1; });
+    regs.forEach(one => {
+      const built = rdlStruct(st, {name:one.name, comp:one.comp}, types);
+      if(built) roots.push({name:safeName(one.name,taken,{}), type:built, kind:"reg",
+                            line:one.comp.line, addr:one.addr});
+    });
   }
 
   function rdlStmt(st,scope){
@@ -620,13 +654,15 @@ var SV = (function(){
   }
 
   /* name [31:0] = reset @ 0x4 += 0x4, more ... ;
-     A range on a field is its bits; on anything else it is an array count. */
+     A range on a field is its bits, and a single value is its width — the field
+     then sits at the next bit going up, which is how SystemRDL reads it, not as
+     a bit index. On anything else a single value is an array count. */
   function rdlInstList(st,comp){
     const out = [];
     for(;;){
       if(cur(st).k!=="id" || RDL_COMP[cur(st).v]) break;
       const inst = {comp, name:cur(st).v, line:cur(st).ln,
-                    count:1, msb:null, lsb:null, addr:null, stride:null};
+                    count:1, msb:null, lsb:null, width:null, addr:null, stride:null};
       st.p++;
       while(isOp(st,0,"[")){
         st.p++;
@@ -635,7 +671,7 @@ var SV = (function(){
           const b = expr(st);
           if(a!==null && b!==null){ inst.msb = Math.max(a,b); inst.lsb = Math.min(a,b); }
         } else if(a!==null){
-          if(comp.kind==="field") inst.msb = inst.lsb = a|0;
+          if(comp.kind==="field") inst.width = Math.max(1, a|0);
           else inst.count = Math.max(1, a|0);
         }
         skipTo(st,["]"]); eat(st,"]");
@@ -644,6 +680,8 @@ var SV = (function(){
       if(eat(st,"@")) inst.addr = expr(st);
       if(isOp(st,0,"+=")){ st.p++; inst.stride = expr(st); }
       if(isOp(st,0,"%=")){ st.p++; expr(st); }
+      // the comment beside the instance, which is where a field says what it is
+      inst.note = st.notes[cur(st).ln] || st.notes[inst.line] || null;
       out.push(inst);
       if(!eat(st,",")) break;
     }
@@ -677,7 +715,7 @@ var SV = (function(){
   /* Walk one root and turn it into a packed struct: every declared field becomes
      a member, and the bits nobody claimed become reserved members, which the page
      already knows to treat quietly because of the leading underscore. */
-  function rdlStruct(st,top,types){
+  function rdlStruct(st,top,types,regs){
     const found = [];
     let end = 0;
 
@@ -690,13 +728,13 @@ var SV = (function(){
         let msb = inst.msb, lsb = inst.lsb;
         if(msb === null){
           lsb = at;
-          msb = at + rdlNum(inst.comp.props.fieldwidth, 1) - 1;
+          msb = at + rdlNum(inst.width, rdlNum(inst.comp.props.fieldwidth, 1)) - 1;
         }
         at = msb + 1;
         if(msb >= rw || lsb < 0) return;                       // outside the register
         found.push({hi:base+msb, lo:base+lsb, name:inst.name,
                     desc:typeof inst.comp.props.desc === "string" ? inst.comp.props.desc : null,
-                    reg:path});
+                    note:inst.note, reg:path});
       });
       end = Math.max(end, base + rw);
     }
@@ -712,7 +750,10 @@ var SV = (function(){
         for(let k=0;k<inst.count && k<1024;k++){
           const nm = path + inst.name + (inst.count>1 ? "_"+k : "");
           const spot = base + k*stride;
-          if(inst.comp.kind === "reg") reg(inst.comp,spot,d,nm);
+          if(inst.comp.kind === "reg"){
+            if(regs) regs.push({name:nm, comp:inst.comp, addr:spot});
+            reg(inst.comp,spot,d,nm);
+          }
           else if(inst.comp.kind==="addrmap" || inst.comp.kind==="regfile")
             walk(inst.comp,spot,d,nm+"_",depth+1);
         }
@@ -746,7 +787,8 @@ var SV = (function(){
            slot[3].hi is one array element, not a struct inside a struct. */
         if(bot === 0) whole = rdlPath(m[1]) || [m[1]];
       }
-      fields.push({hi:f.hi, lo, parts: whole || rdlPath(f.desc) || [f.name], reg:f.reg});
+      fields.push({hi:f.hi, lo, parts: whole || rdlPath(f.desc) || [f.name],
+                   note:f.note, reg:f.reg});
     }
 
     // two fields that would land on one name take their register's name with them
@@ -801,8 +843,11 @@ var SV = (function(){
         next = lo - 1;
         i = j;
       } else {
-        out.push({name:safeName(it.parts[depth],taken,{}),
-                  type:rdlLogic(it.hi - it.lo + 1), line});
+        /* rdlLogic builds a type of its own for every field, so the comment it
+           came with rides along on that without reaching any other member. */
+        const type = rdlLogic(it.hi - it.lo + 1);
+        if(it.note) type.note = it.note;
+        out.push({name:safeName(it.parts[depth],taken,{}), type, line});
         next = it.lo - 1;
         i++;
       }
@@ -971,6 +1016,7 @@ var SV = (function(){
       warn(env,"'"+(path||name)+"' is a union — its members share these bits, so it is drawn as one block.");
     const seg = {name, path:path||name, type:shown, w, off:cur.at, depth,
                  agg: !!rt && (rt.k==="struct"||rt.k==="union"),
+                 note: t && t.note ? t.note : null,      // what a SystemRDL field said it holds
                  zero: w===0};
     if(!expand && w > 0 && rt && rt.k==="struct" && rt.members.length)
       seg.sub = subView(env,t,rt,w,opt);
@@ -1104,10 +1150,10 @@ var SV = (function(){
     intr:1,level:1,littleendian:1,longint:1,lsb0:1,mask:1,mem:1,mementries:1,memwidth:1,
     msb0:1,na:1,name:1,negedge:1,next:1,nonsticky:1,number:1,overflow:1,parameter:1,
     posedge:1,precedence:1,property:1,r:1,rclr:1,ref:1,reg:1,regalign:1,regfile:1,
-    regwidth:1,reset:1,resetsignal:1,rset:1,rsvdset:1,rsvdsetX:1,rw:1,saturate:1,shared:1,
+    regwidth:1,reset:1,resetsignal:1,rset:1,rsvdset:1,rsvdsetX:1,rw:1,rw1:1,saturate:1,shared:1,
     sharedextbus:1,signal:1,signalwidth:1,singlepulse:1,soft:1,span:1,sticky:1,stickybit:1,
     string:1,sw:1,swacc:1,swmod:1,swwe:1,swwel:1,sync:1,this:1,threshold:1,true:1,
-    underflow:1,unsigned:1,w:1,we:1,wel:1,woclr:1,woset:1,wr:1,writeenable:1,xored:1};
+    underflow:1,unsigned:1,w:1,w1:1,we:1,wel:1,woclr:1,woset:1,wr:1,writeenable:1,xored:1};
   const RDL_WIDTHS = [8,16,32,64];
 
   const spaces = n => new Array(Math.max(0,n)+1).join(" ");

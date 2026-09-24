@@ -21,11 +21,13 @@ const ONLY = process.argv.slice(2);
 
 const SUITES = [
   ["rounding",  "the rounding modes, and the strips that pick them"],
+  ["floats",    "every word of every float format, both ways"],
   ["layout",    "the bits an unpacked struct puts its members in"],
   ["generate",  "C and Python, compiled and run"],
   ["nested",    "nested types in all three languages"],
   ["roundtrip", "SystemVerilog to SystemRDL and back"],
   ["page",      "the page in jsdom"],
+  ["rdl",       "the SystemRDL page, its values and its readings"],
   ["syntax",    "the source syntax control, in a browser"],
   ["gutter",    "the line numbers, in a browser"],
   ["image",     "copying the diagram as a picture, in a browser"]

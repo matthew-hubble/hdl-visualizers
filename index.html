@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Fixed point — Q format and struct layout tools</title>
-<meta name="description" content="Three single-page tools: a TI Q format converter, exact fixed-point arithmetic, and a SystemVerilog struct layout visualizer.">
+<meta name="description" content="Four single-page tools: a TI Q format converter, exact fixed-point arithmetic, a SystemVerilog struct layout visualizer and a SystemRDL register visualizer.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -28,9 +28,9 @@
     <div>
       <div class="eyebrow">Fixed point · TI Q format · SystemVerilog</div>
       <h1>Bits, and where the point sits</h1>
-      <p class="lede">Three single-page tools for the arithmetic a DSP actually does and the vectors an RTL struct actually packs into. Every value is worked out in exact integer arithmetic, in the browser.</p>
+      <p class="lede">Four single-page tools for the arithmetic a DSP actually does and the vectors an RTL struct or a register map actually packs into. Every value is worked out in exact integer arithmetic, in the browser.</p>
     </div>
-    <div class="stamp"><small>pages</small><span>3</span><small>no build step</small></div>
+    <div class="stamp"><small>pages</small><span>4</span><small>no build step</small></div>
   </header>
 
   <section class="panel">
@@ -93,6 +93,13 @@
       <h2><span class="kw">struct packed</span> layout</h2>
       <p>Paste a SystemVerilog or SystemRDL declaration and read the bit vector it packs into, then take the C, Python, SystemRDL or SystemVerilog it generates.</p>
       <span class="go">struct-visualizer.html</span>
+    </a>
+
+    <a class="panel tool" href="rdl-visualizer.html">
+      <p class="legendline"><span>Registers</span></p>
+      <h2><span class="kw">field</span> layout and values</h2>
+      <p>Paste a SystemRDL register map and read the vector its registers make, then type a value into any field and read it back as an integer, a Q format word or a float — IEEE 754, bf16, or the eight- and four-bit forms an accelerator packs weights into.</p>
+      <span class="go">rdl-visualizer.html</span>
     </a>
 
   </div>
